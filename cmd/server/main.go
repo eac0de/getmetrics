@@ -39,7 +39,7 @@ func (m *MemStorage) UpdateHandler(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/update/")
 	parts := strings.Split(path, "/")
 	if len(parts) != 3 {
-		http.Error(w, "Invalid URI", http.StatusBadRequest)
+		http.Error(w, "Invalid URI", http.StatusNotFound)
 		return
 	}
 	metricType := parts[0]
