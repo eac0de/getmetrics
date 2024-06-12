@@ -29,14 +29,15 @@ func UpdateMetricHandler(m *storage.MetricsStorage) func(http.ResponseWriter, *h
 		}
 
 		if metricType == "counter" {
-			value, err := strconv.ParseInt(metricValue, 10, 64)
+			i, err := strconv.ParseInt(metricValue, 10, 64)
 			if err != nil {
 				http.Error(w, "Invalid counter value", http.StatusBadRequest)
 				return
 			}
+			value := storage.Counter(i)
 			oldValue := m.Get(metricName)
 			if oldValue != nil {
-				value = value + oldValue.(int64)
+				value = value + oldValue.(storage.Counter)
 			}
 			m.Save(metricName, storage.Counter(value))
 		} else if metricType == "gauge" {
