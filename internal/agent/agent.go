@@ -120,17 +120,11 @@ func (a *Agent) collectMetrics(pollCount *storage.Counter) Metrics {
 
 func (a *Agent) sendMetric(metricType string, metricName string, metricValue interface{}) error {
 	url := fmt.Sprintf("%s/update/%s/%s/%v", a.serverURL, metricType, metricName, metricValue)
-	req, err := http.NewRequest(http.MethodPost, url, nil)
+	resp, err := http.Post(url, "text/plain", nil)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "text/plain")
-	client := http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer func(Body io.ReadCloser) {
+	func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
 			fmt.Printf("Failed to close response body: %v\n", err)
