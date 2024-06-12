@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"fmt"
 	"github.com/eac0de/getmetrics/internal/storage"
 	"github.com/stretchr/testify/assert"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -59,8 +61,14 @@ func TestUpdateMetricHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 			metricsStorage := storage.NewMetricsStorage()
 			UpdateMetricHandler(metricsStorage)(w, r)
-			res := w.Result()
-			assert.Equal(t, test.want.status, res.StatusCode)
+			resp := w.Result()
+			defer func(Body io.ReadCloser) {
+				err := Body.Close()
+				if err != nil {
+					fmt.Printf("Failed to close response body: %v\n", err)
+				}
+			}(resp.Body)
+			assert.Equal(t, test.want.status, resp.StatusCode)
 			assert.Equal(t, test.want.metricsMap, metricsStorage.Metrics)
 		})
 	}
