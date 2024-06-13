@@ -2,13 +2,14 @@ package agent
 
 import (
 	"fmt"
-	"github.com/eac0de/getmetrics/internal/storage"
-	"io"
 	"net/http"
 	"reflect"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/eac0de/getmetrics/internal/storage"
+	"github.com/go-resty/resty/v2"
 )
 
 type Agent struct {
@@ -120,19 +121,13 @@ func (a *Agent) collectMetrics(pollCount *storage.Counter) Metrics {
 
 func (a *Agent) sendMetric(metricType string, metricName string, metricValue interface{}) error {
 	url := fmt.Sprintf("%s/update/%s/%s/%v", a.serverURL, metricType, metricName, metricValue)
-	resp, err := http.Post(url, "text/plain", nil)
+	client := resty.New()
+	resp, err := client.R().SetHeader("contentType", "text/plain").Post(url)
 	if err != nil {
 		return err
 	}
-	func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			fmt.Printf("Failed to close response body: %v\n", err)
-		}
-	}(resp.Body)
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s", body)
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("error: %s", resp.Error())
 	}
 	return nil
 }

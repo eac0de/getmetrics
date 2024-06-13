@@ -1,13 +1,16 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
-	"github.com/eac0de/getmetrics/internal/storage"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/eac0de/getmetrics/internal/storage"
+	"github.com/go-chi/chi/v5"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestUpdateMetricHandler(t *testing.T) {
@@ -16,13 +19,19 @@ func TestUpdateMetricHandler(t *testing.T) {
 		metricsMap map[string]interface{}
 	}
 	tests := []struct {
-		name   string
-		target string
-		want   wantResp
+		name    string
+		context *chi.Context
+		want    wantResp
 	}{
 		{
-			name:   "status 200",
-			target: "/update/gauge/test_name/1",
+			name: "status 200",
+			context: func() *chi.Context {
+				rctx := chi.NewRouteContext()
+				rctx.URLParams.Add("metricType", "gauge")
+				rctx.URLParams.Add("metricName", "test_name")
+				rctx.URLParams.Add("metricValue", "1")
+				return rctx
+			}(),
 			want: wantResp{
 				status: 200,
 				metricsMap: map[string]interface{}{
@@ -31,24 +40,42 @@ func TestUpdateMetricHandler(t *testing.T) {
 			},
 		},
 		{
-			name:   "status 404",
-			target: "/update/gauge/1",
+			name: "status 404",
+			context: func() *chi.Context {
+				rctx := chi.NewRouteContext()
+				rctx.URLParams.Add("metricType", "gauge")
+				rctx.URLParams.Add("metricName", "")
+				rctx.URLParams.Add("metricValue", "1")
+				return rctx
+			}(),
 			want: wantResp{
 				status:     404,
 				metricsMap: map[string]interface{}{},
 			},
 		},
 		{
-			name:   "status 400 with invalid_type",
-			target: "/update/invalid_type/test_name/1",
+			name: "status 400 with invalid_type",
+			context: func() *chi.Context {
+				rctx := chi.NewRouteContext()
+				rctx.URLParams.Add("metricType", "invalid_type")
+				rctx.URLParams.Add("metricName", "test_name")
+				rctx.URLParams.Add("metricValue", "1")
+				return rctx
+			}(),
 			want: wantResp{
 				status:     400,
 				metricsMap: map[string]interface{}{},
 			},
 		},
 		{
-			name:   "status 400 with invalid_value",
-			target: "/update/gauge/test_name/invalid_value",
+			name: "status 400 with invalid_value",
+			context: func() *chi.Context {
+				rctx := chi.NewRouteContext()
+				rctx.URLParams.Add("metricType", "gauge")
+				rctx.URLParams.Add("metricName", "test_name")
+				rctx.URLParams.Add("metricValue", "invalid_value")
+				return rctx
+			}(),
 			want: wantResp{
 				status:     400,
 				metricsMap: map[string]interface{}{},
@@ -57,7 +84,9 @@ func TestUpdateMetricHandler(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			r := httptest.NewRequest(http.MethodPost, test.target, nil)
+			url := "/update/{metricType}/{metricName}/{metricValue}"
+			r := httptest.NewRequest(http.MethodPost, url, nil)
+			r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, test.context))
 			w := httptest.NewRecorder()
 			metricsStorage := storage.NewMetricsStorage()
 			UpdateMetricHandler(metricsStorage)(w, r)

@@ -31,3 +31,7 @@ func (m *MetricsStorage) Get(metricName string) interface{} {
 	}
 	return value
 }
+
+func (m *MetricsStorage) GetAll() map[string]interface{} {
+	return m.Metrics
+}
