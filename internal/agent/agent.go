@@ -18,8 +18,7 @@ type Agent struct {
 	reportInterval time.Duration
 }
 
-func NewAgent(serverHost string, serverPort string, pollInterval time.Duration, reportInterval time.Duration) *Agent {
-	serverURL := "http://" + serverHost + ":" + serverPort
+func NewAgent(serverURL string, pollInterval time.Duration, reportInterval time.Duration) *Agent {
 	return &Agent{
 		serverURL:      serverURL,
 		pollInterval:   pollInterval,

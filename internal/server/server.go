@@ -14,8 +14,7 @@ type Server struct {
 	addr string
 }
 
-func NewServer(host string, port string) *Server {
-	addr := host + ":" + port
+func NewServer(addr string) *Server {
 	return &Server{
 		addr: addr,
 	}

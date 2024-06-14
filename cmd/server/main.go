@@ -1,10 +1,21 @@
 package main
 
 import (
+	"flag"
+
 	s "github.com/eac0de/getmetrics/internal/server"
 )
 
+var addr string
+
+func parseFlags() {
+	flag.StringVar(&addr, "a", "localhost:8080", "server address")
+
+	flag.Parse()
+}
+
 func main() {
-	server := s.NewServer("127.0.0.1", "8080")
+	parseFlags()
+	server := s.NewServer(addr)
 	server.Run()
 }
