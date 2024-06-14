@@ -21,9 +21,6 @@ func parseFlags() {
 
 func main() {
 	parseFlags()
-	println(serverURL)
-	println(pollInterval)
-	println(reportInterval)
 	agent := a.NewAgent(serverURL, pollInterval, reportInterval)
 	agent.Run()
 }
