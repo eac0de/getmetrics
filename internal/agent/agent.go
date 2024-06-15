@@ -19,6 +19,7 @@ type Agent struct {
 }
 
 func NewAgent(serverURL string, pollInterval time.Duration, reportInterval time.Duration) *Agent {
+	serverURL = "http://" + serverURL
 	return &Agent{
 		serverURL:      serverURL,
 		pollInterval:   pollInterval,
