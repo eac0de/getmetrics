@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"time"
 
@@ -10,16 +11,15 @@ import (
 )
 
 type AgentConfig struct {
-	ServerURL      string        `env:"ADDRESS"`
-	PollInterval   time.Duration `env:"POLL_INTERVAL"`
-	ReportInterval time.Duration `env:"REPORT_INTERVAL"`
+	ServerURL      string `env:"ADDRESS"`
+	PollInterval   int    `env:"POLL_INTERVAL"`
+	ReportInterval int    `env:"REPORT_INTERVAL"`
 }
 
 func parseFlags(c *AgentConfig) {
 	flag.StringVar(&c.ServerURL, "a", "localhost:8080", "server address")
-	flag.DurationVar(&c.ReportInterval, "r", 10*time.Second, "report interval")
-	flag.DurationVar(&c.PollInterval, "p", 2*time.Second, "poll interval")
-
+	flag.IntVar(&c.ReportInterval, "r", 10, "report interval in seconds")
+	flag.IntVar(&c.PollInterval, "p", 2, "poll interval in seconds")
 	flag.Parse()
 }
 
@@ -34,6 +34,11 @@ func main() {
 	agentConfig := new(AgentConfig)
 	parseFlags(agentConfig)
 	parseEnv(agentConfig)
-	agent := a.NewAgent(agentConfig.ServerURL, agentConfig.PollInterval, agentConfig.ReportInterval)
+	pollInterval := time.Duration(agentConfig.PollInterval) * time.Second
+	reportInterval := time.Duration(agentConfig.ReportInterval) * time.Second
+	fmt.Println("Server URL:", agentConfig.ServerURL)
+	fmt.Println("Report Interval:", reportInterval)
+	fmt.Println("Poll Interval:", pollInterval)
+	agent := a.NewAgent(agentConfig.ServerURL, pollInterval, reportInterval)
 	agent.Run()
 }
