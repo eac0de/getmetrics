@@ -13,6 +13,12 @@ import (
 	"github.com/eac0de/getmetrics/internal/agent"
 )
 
+type EnvAgentConfig struct {
+	ServerURL      string `env:"ADDRESS"`
+	PollInterval   int    `env:"POLL_INTERVAL"`
+	ReportInterval int    `env:"REPORT_INTERVAL"`
+}
+
 type AgentConfig struct {
 	ServerURL      string        `env:"ADDRESS"`
 	PollInterval   time.Duration `env:"POLL_INTERVAL"`
@@ -37,10 +43,23 @@ func readAgentFlags(c *AgentConfig) {
 }
 
 func readEnvConfig(c *AgentConfig) {
-	err := env.Parse(c)
+	envConfig := new(EnvAgentConfig)
+	err := env.Parse(envConfig)
 	if err != nil {
 		log.Fatal(err)
 	}
+	if envConfig.ServerURL != "" {
+		c.ServerURL = envConfig.ServerURL
+	}
+
+	if envConfig.PollInterval != 0 {
+		c.PollInterval = time.Duration(envConfig.PollInterval) * time.Second
+	}
+
+	if envConfig.ReportInterval != 0 {
+		c.ReportInterval = time.Duration(envConfig.ReportInterval) * time.Second
+	}
+
 }
 
 func main() {
