@@ -2,8 +2,6 @@ package handlers
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -91,12 +89,7 @@ func TestUpdateMetricHandler(t *testing.T) {
 			metricsStorage := storage.NewMetricsStorage()
 			UpdateMetricHandler(metricsStorage)(w, r)
 			resp := w.Result()
-			defer func(Body io.ReadCloser) {
-				err := Body.Close()
-				if err != nil {
-					fmt.Printf("Failed to close response body: %v\n", err)
-				}
-			}(resp.Body)
+			defer resp.Body.Close()
 			assert.Equal(t, test.want.status, resp.StatusCode)
 			assert.Equal(t, test.want.metricsMap, metricsStorage.SystemMetrics)
 		})
