@@ -91,7 +91,7 @@ func TestUpdateMetricHandler(t *testing.T) {
 			metricsStorage := storage.NewMetricsStorage()
 			UpdateMetricHandler(metricsStorage)(w, r)
 			resp := w.Result()
-			func(Body io.ReadCloser) {
+			defer func(Body io.ReadCloser) {
 				err := Body.Close()
 				if err != nil {
 					fmt.Printf("Failed to close response body: %v\n", err)
