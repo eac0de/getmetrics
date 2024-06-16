@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/eac0de/getmetrics/internal/handlers"
@@ -10,26 +11,26 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-type Server struct {
+type MetricsServer struct {
 	addr string
 }
 
-func NewServer(addr string) *Server {
-	return &Server{
+func NewMetricsServer(addr string) *MetricsServer {
+	return &MetricsServer{
 		addr: addr,
 	}
 }
 
-func (s *Server) Run() {
+func (s *MetricsServer) Run() {
 	metricsStorage := storage.NewMetricsStorage()
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
-	r.Get("/", handlers.GetMetricsSummaryHTMLHandler(metricsStorage))
+	r.Get("/", handlers.ShowMetricsSummaryHandler(metricsStorage))
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", handlers.UpdateMetricHandler(metricsStorage))
 	r.Get("/value/{metricType}/{metricName}", handlers.GetMetricHandler(metricsStorage))
 	fmt.Printf("Server started on http://%s\n", s.addr)
 	err := http.ListenAndServe(s.addr, r)
 	if err != nil {
-		fmt.Println(err.Error())
+		log.Fatal(err.Error())
 	}
 }

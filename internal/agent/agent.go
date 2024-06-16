@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"reflect"
 	"runtime"
@@ -14,39 +15,61 @@ import (
 
 type Agent struct {
 	serverURL      string
+	client         *resty.Client
 	pollInterval   time.Duration
 	reportInterval time.Duration
+	done           chan struct{}
 }
 
 func NewAgent(serverURL string, pollInterval time.Duration, reportInterval time.Duration) *Agent {
 	serverURL = "http://" + serverURL
+	client := resty.New()
 	return &Agent{
 		serverURL:      serverURL,
+		client:         client,
 		pollInterval:   pollInterval,
 		reportInterval: reportInterval,
 	}
+}
+
+func (a *Agent) Stop() {
+	close(a.done)
 }
 
 func (a *Agent) Run() {
 	var pollCount storage.Counter
 	var metrics Metrics
 
+	a.done = make(chan struct{})
+
 	go func() {
 		for {
-			metrics = a.collectMetrics(&pollCount)
-			time.Sleep(a.pollInterval)
-
+			select {
+			case <-a.done:
+				log.Println("Poll goroutine is shutting down...")
+				return
+			default:
+				metrics = a.collectMetrics(&pollCount)
+				time.Sleep(a.pollInterval)
+			}
 		}
 	}()
 
 	go func() {
 		for {
-			a.sendMetrics(metrics)
-			time.Sleep(a.reportInterval)
+			select {
+			case <-a.done:
+				log.Println("Report goroutine is shutting down...")
+				return
+			default:
+				a.sendMetrics(metrics)
+				time.Sleep(a.reportInterval)
+			}
 		}
 	}()
 
-	select {}
+	log.Println("Agent is running. Press Ctrl+C to stop.")
+	<-a.done // Блокируемся до закрытия канала done
 }
 
 type Metrics struct {
@@ -119,10 +142,10 @@ func (a *Agent) collectMetrics(pollCount *storage.Counter) Metrics {
 	}
 }
 
+// request format /update/{metricType}/{metricName}/{metricValue}
 func (a *Agent) sendMetric(metricType string, metricName string, metricValue interface{}) error {
 	url := fmt.Sprintf("%s/update/%s/%s/%v", a.serverURL, metricType, metricName, metricValue)
-	client := resty.New()
-	resp, err := client.R().SetHeader("contentType", "text/plain").Post(url)
+	resp, err := a.client.R().SetHeader("contentType", "text/plain").Post(url)
 	if err != nil {
 		return err
 	}

@@ -5,20 +5,24 @@ import (
 	"log"
 
 	"github.com/caarlos0/env/v6"
-	s "github.com/eac0de/getmetrics/internal/server"
+	"github.com/eac0de/getmetrics/internal/server"
 )
 
-type ServerConfig struct {
+type HTTPServerConfig struct {
 	Addr string `env:"ADDRESS"`
 }
 
-func parseFlags(c *ServerConfig) {
-	flag.StringVar(&c.Addr, "a", "localhost:8080", "server address")
+const (
+	defaultAddr = "localhost:8080"
+)
+
+func readServerFlags(c *HTTPServerConfig) {
+	flag.StringVar(&c.Addr, "a", defaultAddr, "server address")
 
 	flag.Parse()
 }
 
-func parseEnv(c *ServerConfig) {
+func readEnvConfig(c *HTTPServerConfig) {
 	err := env.Parse(c)
 	if err != nil {
 		log.Fatal(err)
@@ -26,9 +30,9 @@ func parseEnv(c *ServerConfig) {
 }
 
 func main() {
-	serverConfig := new(ServerConfig)
-	parseFlags(serverConfig)
-	parseEnv(serverConfig)
-	server := s.NewServer(serverConfig.Addr)
-	server.Run()
+	serverConfig := new(HTTPServerConfig)
+	readServerFlags(serverConfig)
+	readEnvConfig(serverConfig)
+	s := server.NewMetricsServer(serverConfig.Addr)
+	s.Run()
 }

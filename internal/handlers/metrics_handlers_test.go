@@ -98,7 +98,7 @@ func TestUpdateMetricHandler(t *testing.T) {
 				}
 			}(resp.Body)
 			assert.Equal(t, test.want.status, resp.StatusCode)
-			assert.Equal(t, test.want.metricsMap, metricsStorage.Metrics)
+			assert.Equal(t, test.want.metricsMap, metricsStorage.SystemMetrics)
 		})
 	}
 }

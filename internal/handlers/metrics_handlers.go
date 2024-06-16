@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"html/template"
 	"net/http"
 	"strconv"
 
@@ -9,7 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func UpdateMetricHandler(m MetricsRepository) func(http.ResponseWriter, *http.Request) {
+func UpdateMetricHandler(m MetricsStorer) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricType := chi.URLParam(r, "metricType")
 		metricName := chi.URLParam(r, "metricName")
@@ -48,7 +49,7 @@ func UpdateMetricHandler(m MetricsRepository) func(http.ResponseWriter, *http.Re
 	}
 }
 
-func GetMetricHandler(m MetricsRepository) func(http.ResponseWriter, *http.Request) {
+func GetMetricHandler(m MetricsStorer) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricName := chi.URLParam(r, "metricName")
 		metricType := chi.URLParam(r, "metricType")
@@ -84,60 +85,75 @@ func GetMetricHandler(m MetricsRepository) func(http.ResponseWriter, *http.Reque
 	}
 }
 
-func GetMetricsSummaryHTMLHandler(m MetricsRepository) func(http.ResponseWriter, *http.Request) {
+type Metric struct {
+	Name  string
+	Value interface{}
+}
+
+type MetricsData struct {
+	Metrics []Metric
+}
+
+const metricsTemplate = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metric Summary</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
+        .container {
+            height: 80%;
+            text-align: center;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            overflow-y: auto;
+        }
+        .metrics {
+            margin-top: 20px;
+        }
+        h1 {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Metric Summary</h1>
+        <div class="metrics">
+            {{range .Metrics}}
+                <p><strong>{{.Name}}</strong> - {{.Value}}</p>
+            {{end}}
+        </div>
+    </div>
+</body>
+</html>
+`
+
+func ShowMetricsSummaryHandler(m MetricsStorer) func(http.ResponseWriter, *http.Request) {
+	tmpl := template.Must(template.New("metrics").Parse(metricsTemplate))
 	return func(w http.ResponseWriter, r *http.Request) {
-		var metricsHTML string
-		var metricHTML string
+		data := MetricsData{}
 		for metricName, metricValue := range m.GetAll() {
-			metricHTML = fmt.Sprintf("<p><strong> %s </strong> - %v</p>", metricName, metricValue)
-			metricsHTML = metricsHTML + metricHTML
+			data.Metrics = append(data.Metrics, Metric{Name: metricName, Value: metricValue})
 		}
-		html := fmt.Sprintf(`
-			<!DOCTYPE html>
-			<html lang="en">
-			<head>
-				<meta charset="UTF-8">
-				<meta name="viewport" content="width=device-width, initial-scale=1.0">
-				<title>Metric Summary</title>
-				<style>
-					body {
-						display: flex;
-						justify-content: center;
-						align-items: center;
-						height: 100vh;
-						margin: 0;
-						font-family: Arial, sans-serif;
-						background-color: #f0f0f0;
-						
-					}
-					.container {
-						height: 80%%;
-						text-align: center;
-						background-color: #fff;
-						padding: 20px;
-						border-radius: 8px;
-						box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-						overflow-y: auto;
-					}
-					.metrics {
-						margin-top: 20px;
-					}
-					h1 {
-						margin-bottom: 20px;
-					}
-				</style>
-			</head>
-			<body>
-				<div class="container">
-					<h1>Metric Summary</h1>
-					<div class="metrics">
-						%s
-					</div>
-				</div>
-			</body>
-			</html>`, metricsHTML)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(html))
+		err := tmpl.Execute(w, data)
+		if err != nil {
+			http.Error(w, "error rendering template", http.StatusInternalServerError)
+			return
+		}
 	}
 }
