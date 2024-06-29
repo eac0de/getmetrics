@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
-	"strconv"
+	"sort"
 
+	"github.com/eac0de/getmetrics/internal/models"
 	"github.com/eac0de/getmetrics/internal/storage"
 	"github.com/go-chi/chi/v5"
 )
@@ -20,28 +23,57 @@ func UpdateMetricHandler(m MetricsStorer) func(http.ResponseWriter, *http.Reques
 			http.Error(w, "metric name is required", http.StatusNotFound)
 			return
 		}
+		err := m.Save(metricType, metricName, metricValue)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+	}
+}
 
-		if metricType == "counter" {
-			i, err := strconv.ParseInt(metricValue, 10, 64)
-			if err != nil {
-				http.Error(w, "Invalid counter value", http.StatusBadRequest)
+func UpdateMetricJSONHandler(m MetricsStorer) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var newMetric models.Metrics
+		var buf bytes.Buffer
+		_, err := buf.ReadFrom(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err = json.Unmarshal(buf.Bytes(), &newMetric); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		metricType := newMetric.MType
+		metricName := newMetric.ID
+
+		if metricName == "" {
+			http.Error(w, "metric name is required", http.StatusNotFound)
+			return
+		}
+		var metricValue interface{}
+		switch metricType {
+		case storage.Counter:
+			if newMetric.Delta == nil {
+				http.Error(w, "for metric type counter field delta is required", http.StatusBadRequest)
 				return
 			}
-			value := storage.Counter(i)
-			oldValue := m.Get(metricName)
-			if _, ok := oldValue.(storage.Counter); ok {
-				value = value + oldValue.(storage.Counter)
-			}
-			m.Save(metricName, storage.Counter(value))
-		} else if metricType == "gauge" {
-			value, err := strconv.ParseFloat(metricValue, 64)
-			if err != nil {
-				http.Error(w, "invalid gauge value", http.StatusBadRequest)
+			metricValue = *newMetric.Delta
+		case storage.Gauge:
+			if newMetric.Value == nil {
+				http.Error(w, "for metric type gauge field value is required", http.StatusBadRequest)
 				return
 			}
-			m.Save(metricName, storage.Gauge(value))
-		} else {
+			metricValue = *newMetric.Value
+		default:
 			http.Error(w, "invalid metric type", http.StatusBadRequest)
+			return
+		}
+		err = m.Save(metricType, metricName, metricValue)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -58,24 +90,43 @@ func GetMetricHandler(m MetricsStorer) func(http.ResponseWriter, *http.Request) 
 			http.Error(w, "metric name is required", http.StatusNotFound)
 			return
 		}
-		metric := m.Get(metricName)
+		metric := m.Get(metricType, metricName)
 		errorMessage := fmt.Sprintf("metric %s not found", metricName)
 		if metric == nil {
 			http.Error(w, errorMessage, http.StatusNotFound)
 			return
 		}
-		if metricType == "counter" {
-			if _, ok := metric.(storage.Counter); !ok {
-				http.Error(w, "invalid metric type", http.StatusBadRequest)
-				return
-			}
-		} else if metricType == "gauge" {
-			if _, ok := metric.(storage.Gauge); !ok {
-				http.Error(w, "invalid metric type", http.StatusBadRequest)
-				return
-			}
-		} else {
-			http.Error(w, "invalid metric type", http.StatusBadRequest)
+		metricStr := fmt.Sprintf("%v", metric)
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(metricStr))
+	}
+}
+
+func GetMetricJSONHandler(m MetricsStorer) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var newMetric models.Metrics
+		var buf bytes.Buffer
+		_, err := buf.ReadFrom(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err = json.Unmarshal(buf.Bytes(), &newMetric); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		metricType := newMetric.MType
+		metricName := newMetric.ID
+
+		if metricName == "" {
+			http.Error(w, "metric name is required", http.StatusNotFound)
+			return
+		}
+		metric := m.Get(metricType, metricName)
+		errorMessage := fmt.Sprintf("metric %s not found", metricName)
+		if metric == nil {
+			http.Error(w, errorMessage, http.StatusNotFound)
 			return
 		}
 		metricStr := fmt.Sprintf("%v", metric)
@@ -145,9 +196,14 @@ func ShowMetricsSummaryHandler(m MetricsStorer) func(http.ResponseWriter, *http.
 	tmpl := template.Must(template.New("metrics").Parse(metricsTemplate))
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := MetricsData{}
-		for metricName, metricValue := range m.GetAll() {
-			data.Metrics = append(data.Metrics, Metric{Name: metricName, Value: metricValue})
+		for _, metric := range m.GetAll() {
+			for metricName, metricValue := range metric {
+				data.Metrics = append(data.Metrics, Metric{Name: metricName, Value: metricValue})
+			}
 		}
+		sort.Slice(data.Metrics, func(i, j int) bool {
+			return data.Metrics[i].Name < data.Metrics[j].Name
+		})
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		err := tmpl.Execute(w, data)

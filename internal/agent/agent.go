@@ -1,15 +1,15 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"reflect"
 	"runtime"
-	"strings"
 	"time"
 
-	"github.com/eac0de/getmetrics/internal/storage"
+	"github.com/eac0de/getmetrics/internal/models"
 	"github.com/go-resty/resty/v2"
 )
 
@@ -37,7 +37,7 @@ func (a *Agent) Stop() {
 }
 
 func (a *Agent) Run() {
-	var pollCount storage.Counter
+	var pollCount int64
 	var metrics Metrics
 
 	a.done = make(chan struct{})
@@ -73,79 +73,105 @@ func (a *Agent) Run() {
 }
 
 type Metrics struct {
-	Alloc         storage.Gauge   `json:"alloc"`
-	BuckHashSys   storage.Gauge   `json:"buck_hash_sys"`
-	Frees         storage.Gauge   `json:"frees"`
-	GCCPUFraction storage.Gauge   `json:"gccpufraction"`
-	GCSys         storage.Gauge   `json:"gcsys"`
-	HeapAlloc     storage.Gauge   `json:"heap_alloc"`
-	HeapIdle      storage.Gauge   `json:"heap_idle"`
-	HeapInuse     storage.Gauge   `json:"heap_inuse"`
-	HeapObjects   storage.Gauge   `json:"heap_objects"`
-	HeapReleased  storage.Gauge   `json:"heap_released"`
-	HeapSys       storage.Gauge   `json:"heap_sys"`
-	LastGC        storage.Gauge   `json:"last_gc"`
-	Lookups       storage.Gauge   `json:"lookups"`
-	MCacheInuse   storage.Gauge   `json:"mcache_inuse"`
-	MCacheSys     storage.Gauge   `json:"mcache_sys"`
-	MSpanInuse    storage.Gauge   `json:"mspan_inuse"`
-	MSpanSys      storage.Gauge   `json:"mspan_sys"`
-	Mallocs       storage.Gauge   `json:"mallocs"`
-	NextGC        storage.Gauge   `json:"next_gc"`
-	NumForcedGC   storage.Gauge   `json:"num_forced_gc"`
-	NumGC         storage.Gauge   `json:"num_gc"`
-	OtherSys      storage.Gauge   `json:"other_sys"`
-	PauseTotalNs  storage.Gauge   `json:"pause_total_ns"`
-	StackInuse    storage.Gauge   `json:"stack_inuse"`
-	StackSys      storage.Gauge   `json:"stack_sys"`
-	Sys           storage.Gauge   `json:"sys"`
-	TotalAlloc    storage.Gauge   `json:"total_alloc"`
-	PollCount     storage.Counter `json:"poll_count"`
-	RandomValue   storage.Gauge   `json:"random_value"`
+	Alloc         float64 `json:"alloc"`
+	BuckHashSys   float64 `json:"buck_hash_sys"`
+	Frees         float64 `json:"frees"`
+	GCCPUFraction float64 `json:"gccpufraction"`
+	GCSys         float64 `json:"gcsys"`
+	HeapAlloc     float64 `json:"heap_alloc"`
+	HeapIdle      float64 `json:"heap_idle"`
+	HeapInuse     float64 `json:"heap_inuse"`
+	HeapObjects   float64 `json:"heap_objects"`
+	HeapReleased  float64 `json:"heap_released"`
+	HeapSys       float64 `json:"heap_sys"`
+	LastGC        float64 `json:"last_gc"`
+	Lookups       float64 `json:"lookups"`
+	MCacheInuse   float64 `json:"mcache_inuse"`
+	MCacheSys     float64 `json:"mcache_sys"`
+	MSpanInuse    float64 `json:"mspan_inuse"`
+	MSpanSys      float64 `json:"mspan_sys"`
+	Mallocs       float64 `json:"mallocs"`
+	NextGC        float64 `json:"next_gc"`
+	NumForcedGC   float64 `json:"num_forced_gc"`
+	NumGC         float64 `json:"num_gc"`
+	OtherSys      float64 `json:"other_sys"`
+	PauseTotalNs  float64 `json:"pause_total_ns"`
+	StackInuse    float64 `json:"stack_inuse"`
+	StackSys      float64 `json:"stack_sys"`
+	Sys           float64 `json:"sys"`
+	TotalAlloc    float64 `json:"total_alloc"`
+	PollCount     int64   `json:"poll_count"`
+	RandomValue   float64 `json:"random_value"`
 }
 
-func (a *Agent) collectMetrics(pollCount *storage.Counter) Metrics {
+func (a *Agent) collectMetrics(pollCount *int64) Metrics {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 	*pollCount++
 
 	return Metrics{
-		Alloc:         storage.Gauge(memStats.Alloc),
-		BuckHashSys:   storage.Gauge(memStats.BuckHashSys),
-		Frees:         storage.Gauge(memStats.Frees),
-		GCCPUFraction: storage.Gauge(memStats.GCCPUFraction),
-		GCSys:         storage.Gauge(memStats.GCSys),
-		HeapAlloc:     storage.Gauge(memStats.HeapAlloc),
-		HeapIdle:      storage.Gauge(memStats.HeapIdle),
-		HeapInuse:     storage.Gauge(memStats.HeapInuse),
-		HeapObjects:   storage.Gauge(memStats.HeapObjects),
-		HeapReleased:  storage.Gauge(memStats.HeapReleased),
-		HeapSys:       storage.Gauge(memStats.HeapSys),
-		LastGC:        storage.Gauge(memStats.LastGC),
-		Lookups:       storage.Gauge(memStats.Lookups),
-		MCacheInuse:   storage.Gauge(memStats.MCacheInuse),
-		MCacheSys:     storage.Gauge(memStats.MCacheSys),
-		MSpanInuse:    storage.Gauge(memStats.MSpanInuse),
-		MSpanSys:      storage.Gauge(memStats.MSpanSys),
-		Mallocs:       storage.Gauge(memStats.MSpanSys),
-		NextGC:        storage.Gauge(memStats.MSpanSys),
-		NumForcedGC:   storage.Gauge(memStats.MSpanSys),
-		NumGC:         storage.Gauge(memStats.MSpanSys),
-		OtherSys:      storage.Gauge(memStats.MSpanSys),
-		PauseTotalNs:  storage.Gauge(memStats.MSpanSys),
-		StackInuse:    storage.Gauge(memStats.MSpanSys),
-		StackSys:      storage.Gauge(memStats.MSpanSys),
-		Sys:           storage.Gauge(memStats.MSpanSys),
-		TotalAlloc:    storage.Gauge(memStats.MSpanSys),
+		Alloc:         float64(memStats.Alloc),
+		BuckHashSys:   float64(memStats.BuckHashSys),
+		Frees:         float64(memStats.Frees),
+		GCCPUFraction: float64(memStats.GCCPUFraction),
+		GCSys:         float64(memStats.GCSys),
+		HeapAlloc:     float64(memStats.HeapAlloc),
+		HeapIdle:      float64(memStats.HeapIdle),
+		HeapInuse:     float64(memStats.HeapInuse),
+		HeapObjects:   float64(memStats.HeapObjects),
+		HeapReleased:  float64(memStats.HeapReleased),
+		HeapSys:       float64(memStats.HeapSys),
+		LastGC:        float64(memStats.LastGC),
+		Lookups:       float64(memStats.Lookups),
+		MCacheInuse:   float64(memStats.MCacheInuse),
+		MCacheSys:     float64(memStats.MCacheSys),
+		MSpanInuse:    float64(memStats.MSpanInuse),
+		MSpanSys:      float64(memStats.MSpanSys),
+		Mallocs:       float64(memStats.MSpanSys),
+		NextGC:        float64(memStats.MSpanSys),
+		NumForcedGC:   float64(memStats.MSpanSys),
+		NumGC:         float64(memStats.MSpanSys),
+		OtherSys:      float64(memStats.MSpanSys),
+		PauseTotalNs:  float64(memStats.MSpanSys),
+		StackInuse:    float64(memStats.MSpanSys),
+		StackSys:      float64(memStats.MSpanSys),
+		Sys:           float64(memStats.MSpanSys),
+		TotalAlloc:    float64(memStats.MSpanSys),
 		PollCount:     *pollCount,
-		RandomValue:   storage.Gauge(memStats.MSpanSys),
+		RandomValue:   float64(memStats.MSpanSys),
 	}
 }
 
-// request format /update/{metricType}/{metricName}/{metricValue}
-func (a *Agent) sendMetric(metricType string, metricName string, metricValue interface{}) error {
-	url := fmt.Sprintf("%s/update/%s/%s/%v", a.serverURL, metricType, metricName, metricValue)
-	resp, err := a.client.R().SetHeader("contentType", "text/plain").Post(url)
+// request format /update/
+func (a *Agent) sendMetric(metricName string, metricValue interface{}) error {
+	url := fmt.Sprintf("%s/update/", a.serverURL)
+	metric := models.Metrics{
+		ID: metricName,
+	}
+	metricType := reflect.ValueOf(metricValue).Type().Name()
+	switch metricType {
+	case "int64":
+		metric.MType = "counter"
+		value, ok := metricValue.(int64)
+		if !ok {
+			return fmt.Errorf("invalid value for type counter")
+		}
+		metric.Delta = &value
+	case "float64":
+		metric.MType = "gauge"
+		value, ok := metricValue.(float64)
+		if !ok {
+			return fmt.Errorf("invalid value for type gauge")
+		}
+		metric.Value = &value
+	default:
+		return fmt.Errorf("invalid type of value")
+	}
+	metricJSON, err := json.Marshal(metric)
+	if err != nil {
+		return err
+	}
+	resp, err := a.client.R().SetHeader("Content-Type", "application/json").SetBody(metricJSON).Post(url)
 	if err != nil {
 		return err
 	}
@@ -189,8 +215,7 @@ func (a *Agent) sendMetrics(metrics Metrics) {
 	}
 
 	for metricName, metricValue := range values {
-		metricType := strings.ToLower(reflect.TypeOf(metricValue).Name())
-		if err := a.sendMetric(metricType, metricName, metricValue); err != nil {
+		if err := a.sendMetric(metricName, metricValue); err != nil {
 			fmt.Printf("failed to send metric %s: %s\n", metricName, err.Error())
 		}
 	}

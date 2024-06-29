@@ -27,8 +27,13 @@ func (s *MetricsServer) Run(logLevel string) {
 	r := chi.NewRouter()
 	r.Use(logger.LoggerMiddleware)
 	r.Get("/", handlers.ShowMetricsSummaryHandler(metricsStorage))
+
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", handlers.UpdateMetricHandler(metricsStorage))
+	r.Post("/update/", handlers.UpdateMetricJSONHandler(metricsStorage))
+	
 	r.Get("/value/{metricType}/{metricName}", handlers.GetMetricHandler(metricsStorage))
+	r.Post("/value/", handlers.GetMetricJSONHandler(metricsStorage))
+
 	logger.Log.Info("Running server", zap.String("address", fmt.Sprintf("http://%s", s.addr)))
 	err := http.ListenAndServe(s.addr, r)
 	if err != nil {
