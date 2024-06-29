@@ -9,15 +9,18 @@ import (
 )
 
 type HTTPServerConfig struct {
-	Addr string `env:"ADDRESS"`
+	Addr     string `env:"ADDRESS"`
+	LogLevel string `env:"ADDRESS"`
 }
 
 const (
-	defaultAddr = "localhost:8080"
+	defaultAddr     = "localhost:8080"
+	defaultLogLevel = "info"
 )
 
 func readServerFlags(c *HTTPServerConfig) {
 	flag.StringVar(&c.Addr, "a", defaultAddr, "server address")
+	flag.StringVar(&c.LogLevel, "ll", defaultLogLevel, "server log level")
 
 	flag.Parse()
 }
@@ -34,5 +37,5 @@ func main() {
 	readServerFlags(serverConfig)
 	readEnvConfig(serverConfig)
 	s := server.NewMetricsServer(serverConfig.Addr)
-	s.Run()
+	s.Run(serverConfig.LogLevel)
 }
