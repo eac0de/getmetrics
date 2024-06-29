@@ -28,10 +28,18 @@ func UpdateMetricHandler(m MetricsStorer) func(http.ResponseWriter, *http.Reques
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		metricJSON, _ := json.Marshal(metric)
-		w.Header().Set("Content-Type", "application/json")
+		var value interface{}
+		switch metric.MType {
+		case storage.Counter:
+
+			value = *metric.Delta
+		case storage.Gauge:
+			value = *metric.Value
+		}
+		metricStr := fmt.Sprintf("%v", value)
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		w.Write(metricJSON)
+		w.Write([]byte(metricStr))
 	}
 }
 
@@ -100,10 +108,18 @@ func GetMetricHandler(m MetricsStorer) func(http.ResponseWriter, *http.Request) 
 			http.Error(w, errorMessage, http.StatusNotFound)
 			return
 		}
-		metricJSON, _ := json.Marshal(metric)
-		w.Header().Set("Content-Type", "application/json")
+		var value interface{}
+		switch metric.MType {
+		case storage.Counter:
+
+			value = *metric.Delta
+		case storage.Gauge:
+			value = *metric.Value
+		}
+		metricStr := fmt.Sprintf("%v", value)
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		w.Write(metricJSON)
+		w.Write([]byte(metricStr))
 	}
 }
 
