@@ -1,8 +1,6 @@
 package logger
 
 import (
-	"bytes"
-	"io"
 	"net/http"
 	"time"
 
@@ -43,12 +41,6 @@ func LoggerMiddleware(h http.Handler) http.Handler {
 			duration time.Duration
 		)
 		start := time.Now()
-		bodyBytes, err := io.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, "Unable to read request body", http.StatusInternalServerError)
-			return
-		}
-		r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 		h.ServeHTTP(&lw, r)
 		duration = time.Since(start)
 		Log.Info("HTTP request",
@@ -57,7 +49,6 @@ func LoggerMiddleware(h http.Handler) http.Handler {
 			zap.Duration("duration", duration),
 			zap.Int("statusCode", lw.responseData.status),
 			zap.Int("size", lw.responseData.size),
-			zap.ByteString("body", bodyBytes),
 		)
 	}
 	return http.HandlerFunc(fn)

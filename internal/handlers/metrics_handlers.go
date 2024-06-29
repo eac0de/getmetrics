@@ -23,13 +23,15 @@ func UpdateMetricHandler(m MetricsStorer) func(http.ResponseWriter, *http.Reques
 			http.Error(w, "metric name is required", http.StatusNotFound)
 			return
 		}
-		err := m.Save(metricType, metricName, metricValue)
+		metric, err := m.Save(metricType, metricName, metricValue)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		metricJSON, _ := json.Marshal(metric)
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		w.Write(metricJSON)
 	}
 }
 
@@ -71,13 +73,15 @@ func UpdateMetricJSONHandler(m MetricsStorer) func(http.ResponseWriter, *http.Re
 			http.Error(w, "invalid metric type", http.StatusBadRequest)
 			return
 		}
-		err = m.Save(metricType, metricName, metricValue)
+		metric, err := m.Save(metricType, metricName, metricValue)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		metricJSON, _ := json.Marshal(metric)
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
+		w.Write(metricJSON)
 	}
 }
 
@@ -96,10 +100,10 @@ func GetMetricHandler(m MetricsStorer) func(http.ResponseWriter, *http.Request) 
 			http.Error(w, errorMessage, http.StatusNotFound)
 			return
 		}
-		metricStr := fmt.Sprintf("%v", metric)
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		metricJSON, _ := json.Marshal(metric)
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(metricStr))
+		w.Write(metricJSON)
 	}
 }
 
@@ -129,10 +133,10 @@ func GetMetricJSONHandler(m MetricsStorer) func(http.ResponseWriter, *http.Reque
 			http.Error(w, errorMessage, http.StatusNotFound)
 			return
 		}
-		metricStr := fmt.Sprintf("%v", metric)
+		metricJSON, _ := json.Marshal(metric)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(metricStr))
+		w.Write(metricJSON)
 	}
 }
 
