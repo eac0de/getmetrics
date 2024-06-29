@@ -130,7 +130,7 @@ func GetMetricJSONHandler(m MetricsStorer) func(http.ResponseWriter, *http.Reque
 			return
 		}
 		metricStr := fmt.Sprintf("%v", metric)
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(metricStr))
 	}
