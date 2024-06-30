@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/eac0de/getmetrics/internal/compressor"
 	"github.com/eac0de/getmetrics/internal/handlers"
 	"github.com/eac0de/getmetrics/internal/logger"
 	"github.com/eac0de/getmetrics/internal/storage"
@@ -26,11 +27,13 @@ func (s *MetricsServer) Run(logLevel string) {
 	metricsStorage := storage.NewMetricsStorage()
 	r := chi.NewRouter()
 	r.Use(logger.LoggerMiddleware)
+	contentTypesForCompress := "application/json text/html"
+	r.Use(compressor.GetGzipMiddleware(contentTypesForCompress))
 	r.Get("/", handlers.ShowMetricsSummaryHandler(metricsStorage))
 
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", handlers.UpdateMetricHandler(metricsStorage))
 	r.Post("/update/", handlers.UpdateMetricJSONHandler(metricsStorage))
-	
+
 	r.Get("/value/{metricType}/{metricName}", handlers.GetMetricHandler(metricsStorage))
 	r.Post("/value/", handlers.GetMetricJSONHandler(metricsStorage))
 

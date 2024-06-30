@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -173,10 +172,6 @@ func TestUpdateMetricJSONHandler(t *testing.T) {
 			metricsStorage := storage.NewMetricsStorage()
 			UpdateMetricJSONHandler(metricsStorage)(w, r)
 			resp := w.Result()
-			if err != nil {
-				fmt.Println("Error reading response body:", err)
-				return
-			}
 			defer resp.Body.Close()
 			assert.Equal(t, test.want.status, resp.StatusCode)
 			assert.Equal(t, test.want.metricsMap, metricsStorage.SystemMetrics)

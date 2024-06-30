@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/eac0de/getmetrics/internal/compressor"
 	"github.com/eac0de/getmetrics/internal/models"
 	"github.com/go-resty/resty/v2"
 )
@@ -171,7 +172,16 @@ func (a *Agent) sendMetric(metricName string, metricValue interface{}) error {
 	if err != nil {
 		return err
 	}
-	resp, err := a.client.R().SetHeader("Content-Type", "application/json").SetBody(metricJSON).Post(url)
+	metricGzip, err := compressor.GzipData(metricJSON)
+	if err != nil {
+		return err
+	}
+	resp, err := a.client.
+		R().
+		SetHeader("Content-Type", "application/json").
+		SetHeader("Content-Encoding", "gzip").
+		SetBody(metricGzip).
+		Post(url)
 	if err != nil {
 		return err
 	}
