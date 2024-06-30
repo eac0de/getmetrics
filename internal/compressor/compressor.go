@@ -25,7 +25,7 @@ func newCompressWriter(w http.ResponseWriter, contentTypes string) *compressWrit
 }
 
 func (cw *compressWriter) Write(p []byte) (int, error) {
-	contentType := cw.w.Header().Get("Content-Type")
+	contentType := strings.Split(cw.w.Header().Get("Content-Type"), ";")[0]
 	isTypeForCompress := strings.Contains(cw.contentTypes, contentType)
 	if isTypeForCompress {
 		return cw.zw.Write(p)
@@ -38,7 +38,7 @@ func (cw *compressWriter) Header() http.Header {
 }
 
 func (cw *compressWriter) WriteHeader(statusCode int) {
-	contentType := cw.w.Header().Get("Content-Type")
+	contentType := strings.Split(cw.w.Header().Get("Content-Type"), ";")[0]
 	isTypeForCompress := strings.Contains(cw.contentTypes, contentType)
 	if isTypeForCompress {
 		cw.w.Header().Set("Content-Encoding", "gzip")
@@ -46,8 +46,8 @@ func (cw *compressWriter) WriteHeader(statusCode int) {
 	cw.w.WriteHeader(statusCode)
 }
 
-func (c *compressWriter) Close() error {
-	return c.zw.Close()
+func (cw *compressWriter) Close() error {
+	return cw.zw.Close()
 }
 
 // Реализует io.ReadCloser, нужен для чтения сжатых данных
@@ -68,15 +68,15 @@ func newCompressReader(r io.ReadCloser) (*compressReader, error) {
 	}, nil
 }
 
-func (c compressReader) Read(p []byte) (n int, err error) {
-	return c.zr.Read(p)
+func (cr compressReader) Read(p []byte) (n int, err error) {
+	return cr.zr.Read(p)
 }
 
-func (c *compressReader) Close() error {
-	if err := c.r.Close(); err != nil {
+func (cr *compressReader) Close() error {
+	if err := cr.r.Close(); err != nil {
 		return err
 	}
-	return c.zr.Close()
+	return cr.zr.Close()
 }
 
 func GzipData(p []byte) ([]byte, error) {
