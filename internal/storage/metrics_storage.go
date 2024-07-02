@@ -16,13 +16,16 @@ const (
 type (
 	MetricsStorage struct {
 		mu            sync.Mutex
-		SystemMetrics map[string]map[string]interface{}
+		SystemMetrics models.SystemMetrics
 	}
 )
 
 func NewMetricsStorage() *MetricsStorage {
 	return &MetricsStorage{
-		SystemMetrics: make(map[string]map[string]interface{}),
+		SystemMetrics: models.SystemMetrics{
+			Counter: map[string]int64{},
+			Gauge:   map[string]float64{},
+		},
 	}
 }
 
@@ -38,74 +41,87 @@ func (m *MetricsStorage) Save(metricType string, metricName string, metricValue 
 			if valueStr, ok := metricValue.(string); ok {
 				metricValueFloat, err = strconv.ParseFloat(valueStr, 64)
 				if err != nil {
-					return nil, fmt.Errorf("invalid value type for guage metric")
+					return nil, fmt.Errorf("invalid value type for guage metric(1)")
 				}
 			} else {
-				return nil, fmt.Errorf("invalid value type for guage metric")
+				return nil, fmt.Errorf("invalid value type for guage metric(2)")
 			}
 		}
-		if m.SystemMetrics[Gauge] == nil {
-			m.SystemMetrics[Gauge] = make(map[string]interface{})
-		}
-		metricValue = metricValueFloat
+		m.SystemMetrics.Gauge[metricName] = metricValueFloat
 		metric.Value = &metricValueFloat
+		metric.MType = Gauge
 	case Counter:
 		metricValueInt, ok := metricValue.(int64)
 		if !ok {
 			if valueStr, ok := metricValue.(string); ok {
 				metricValueInt, err = strconv.ParseInt(valueStr, 10, 64)
 				if err != nil {
-					return nil, fmt.Errorf("invalid value type for counter metric")
+					return nil, fmt.Errorf("invalid value type for counter metric(1)")
 				}
 			} else {
-				return nil, fmt.Errorf("invalid value type for counter metric")
+				return nil, fmt.Errorf("invalid value type for counter metric(2)")
 			}
 		}
-		if m.SystemMetrics[Counter] == nil {
-			m.SystemMetrics[Counter] = make(map[string]interface{})
+		if oldValue, ok := m.SystemMetrics.Counter[metricName]; ok {
+			metricValueInt = metricValueInt + oldValue
 		}
-		if value, ok := m.SystemMetrics[Counter][metricName]; ok {
-			if oldValue, ok := value.(int64); ok {
-				metricValueInt = metricValueInt + oldValue
-			} else {
-				return nil, fmt.Errorf("stored counter value has invalid type")
-			}
-		}
-		metricValue = metricValueInt
+		m.SystemMetrics.Counter[metricName] = metricValueInt
 		metric.Delta = &metricValueInt
+		metric.MType = Counter
 	default:
 		// Обработка некорректного типа метрики
 		return nil, fmt.Errorf("invalid metric type")
 	}
 	metric.ID = metricName
-	metric.MType = metricType
-	m.SystemMetrics[metricType][metricName] = metricValue
 	return &metric, nil
 }
 
 func (m *MetricsStorage) Get(metricType string, metricName string) *models.Metrics {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	value, ok := m.SystemMetrics[metricType][metricName]
-	if !ok {
-		return nil
-	}
-	metric := models.Metrics{
-		ID: metricName,
-	}
+	var metric models.Metrics
 	switch metricType {
 	case Gauge:
-		valueFloat, _ := value.(float64)
-		metric.Value = &valueFloat
+		value, ok := m.SystemMetrics.Gauge[metricName]
+		if !ok {
+			return nil
+		}
+		metric.Value = &value
 		metric.MType = Gauge
 	case Counter:
-		valueFloat, _ := value.(int64)
-		metric.Delta = &valueFloat
+		value, ok := m.SystemMetrics.Counter[metricName]
+		if !ok {
+			return nil
+		}
+		metric.Delta = &value
 		metric.MType = Counter
+	default:
+		// Обработка некорректного типа метрики
+		return nil
 	}
+	metric.ID = metricName
 	return &metric
 }
 
-func (m *MetricsStorage) GetAll() map[string]map[string]interface{} {
-	return m.SystemMetrics
+func (m *MetricsStorage) GetAll() []*models.Metrics {
+	var metrics []*models.Metrics
+	for name, value := range m.SystemMetrics.Gauge {
+		valueCopy := value
+		metric := models.Metrics{
+			ID:    name,
+			MType: Gauge,
+			Value: &valueCopy,
+		}
+		metrics = append(metrics, &metric)
+	}
+	for name, value := range m.SystemMetrics.Counter {
+		valueCopy := value
+		metric := models.Metrics{
+			ID:    name,
+			MType: Gauge,
+			Delta: &valueCopy,
+		}
+		metrics = append(metrics, &metric)
+	}
+	return metrics
 }

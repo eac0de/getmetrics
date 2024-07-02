@@ -3,11 +3,11 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"time"
 
+	"github.com/eac0de/getmetrics/internal/models"
 	"github.com/eac0de/getmetrics/internal/storage"
 )
 
@@ -17,16 +17,26 @@ func LoadMetricsFromFile(filename string, m *storage.MetricsStorage) error {
 		return err
 	}
 	defer f.Close()
-	buf, err := io.ReadAll(f)
+
+	// Проверяем, что файл не пустой
+	fi, err := f.Stat()
 	if err != nil {
 		return err
 	}
-	metrics := map[string]map[string]interface{}{}
-	err = json.Unmarshal(buf, &metrics)
-	if err != nil {
+	if fi.Size() == 0 {
+		// Если файл пустой, возвращаем nil, так как это не ошибка
+		return nil
+	}
+
+	// Декодируем JSON
+	decoder := json.NewDecoder(f)
+	metrics := new(models.SystemMetrics)
+	if err := decoder.Decode(&metrics); err != nil {
 		return err
 	}
-	m.SystemMetrics = metrics
+
+	// Сохраняем метрики в хранилище
+	m.SystemMetrics = *metrics
 	return nil
 }
 
@@ -36,7 +46,7 @@ func SaveMetricsToFile(filename string, m *storage.MetricsStorage) error {
 		return err
 	}
 	defer f.Close()
-	metrics := m.GetAll()
+	metrics := m.SystemMetrics
 	data, err := json.MarshalIndent(metrics, "", "    ")
 	if err != nil {
 		return err

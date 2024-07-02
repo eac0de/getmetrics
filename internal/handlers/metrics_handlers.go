@@ -156,15 +156,6 @@ func GetMetricJSONHandler(m storage.MetricsStorer) func(http.ResponseWriter, *ht
 	}
 }
 
-type Metric struct {
-	Name  string
-	Value interface{}
-}
-
-type MetricsData struct {
-	Metrics []Metric
-}
-
 const metricsTemplate = `
 <!DOCTYPE html>
 <html lang="en">
@@ -203,8 +194,12 @@ const metricsTemplate = `
     <div class="container">
         <h1>Metric Summary</h1>
         <div class="metrics">
-            {{range .Metrics}}
-                <p><strong>{{.Name}}</strong> - {{.Value}}</p>
+            {{range .}}
+				{{if eq .MType "gauge"}}
+                <p><strong>{{.ID}}</strong> - {{.Value}}</p>
+				{{else}}
+				<p><strong>{{.ID}}</strong> - {{.Delta}}</p>
+				{{end}}
             {{end}}
         </div>
     </div>
@@ -215,18 +210,13 @@ const metricsTemplate = `
 func ShowMetricsSummaryHandler(m storage.MetricsStorer) func(http.ResponseWriter, *http.Request) {
 	tmpl := template.Must(template.New("metrics").Parse(metricsTemplate))
 	return func(w http.ResponseWriter, r *http.Request) {
-		data := MetricsData{}
-		for _, metric := range m.GetAll() {
-			for metricName, metricValue := range metric {
-				data.Metrics = append(data.Metrics, Metric{Name: metricName, Value: metricValue})
-			}
-		}
-		sort.Slice(data.Metrics, func(i, j int) bool {
-			return data.Metrics[i].Name < data.Metrics[j].Name
+		metrics := m.GetAll()
+		sort.Slice(metrics, func(i, j int) bool {
+			return metrics[i].ID < metrics[j].ID
 		})
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		err := tmpl.Execute(w, data)
+		err := tmpl.Execute(w, metrics)
 		if err != nil {
 			http.Error(w, "error rendering template", http.StatusInternalServerError)
 			return

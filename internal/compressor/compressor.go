@@ -28,6 +28,7 @@ func (cw *compressWriter) Write(p []byte) (int, error) {
 	contentType := strings.Split(cw.w.Header().Get("Content-Type"), ";")[0]
 	isTypeForCompress := strings.Contains(cw.contentTypes, contentType)
 	if isTypeForCompress {
+		cw.w.Header().Set("Content-Encoding", "gzip")
 		return cw.zw.Write(p)
 	}
 	return cw.w.Write(p)
@@ -47,7 +48,12 @@ func (cw *compressWriter) WriteHeader(statusCode int) {
 }
 
 func (cw *compressWriter) Close() error {
-	return cw.zw.Close()
+	contentType := strings.Split(cw.w.Header().Get("Content-Type"), ";")[0]
+	isTypeForCompress := strings.Contains(cw.contentTypes, contentType)
+	if isTypeForCompress {
+		return cw.zw.Close()
+	}
+	return nil
 }
 
 // Реализует io.ReadCloser, нужен для чтения сжатых данных
