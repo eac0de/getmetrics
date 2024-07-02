@@ -13,7 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func UpdateMetricHandler(m MetricsStorer) func(http.ResponseWriter, *http.Request) {
+func UpdateMetricHandler(m storage.MetricsStorer) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricType := chi.URLParam(r, "metricType")
 		metricName := chi.URLParam(r, "metricName")
@@ -43,7 +43,7 @@ func UpdateMetricHandler(m MetricsStorer) func(http.ResponseWriter, *http.Reques
 	}
 }
 
-func UpdateMetricJSONHandler(m MetricsStorer) func(http.ResponseWriter, *http.Request) {
+func UpdateMetricJSONHandler(m storage.MetricsStorer) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var newMetric models.Metrics
 		var buf bytes.Buffer
@@ -93,7 +93,7 @@ func UpdateMetricJSONHandler(m MetricsStorer) func(http.ResponseWriter, *http.Re
 	}
 }
 
-func GetMetricHandler(m MetricsStorer) func(http.ResponseWriter, *http.Request) {
+func GetMetricHandler(m storage.MetricsStorer) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricName := chi.URLParam(r, "metricName")
 		metricType := chi.URLParam(r, "metricType")
@@ -123,7 +123,7 @@ func GetMetricHandler(m MetricsStorer) func(http.ResponseWriter, *http.Request) 
 	}
 }
 
-func GetMetricJSONHandler(m MetricsStorer) func(http.ResponseWriter, *http.Request) {
+func GetMetricJSONHandler(m storage.MetricsStorer) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var newMetric models.Metrics
 		var buf bytes.Buffer
@@ -212,7 +212,7 @@ const metricsTemplate = `
 </html>
 `
 
-func ShowMetricsSummaryHandler(m MetricsStorer) func(http.ResponseWriter, *http.Request) {
+func ShowMetricsSummaryHandler(m storage.MetricsStorer) func(http.ResponseWriter, *http.Request) {
 	tmpl := template.Must(template.New("metrics").Parse(metricsTemplate))
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := MetricsData{}

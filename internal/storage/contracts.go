@@ -1,4 +1,4 @@
-package handlers
+package storage
 
 import "github.com/eac0de/getmetrics/internal/models"
 

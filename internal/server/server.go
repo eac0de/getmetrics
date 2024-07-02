@@ -25,10 +25,12 @@ func NewMetricsServer(addr string) *MetricsServer {
 func (s *MetricsServer) Run(logLevel string) {
 	logger.InitLogger(logLevel)
 	metricsStorage := storage.NewMetricsStorage()
+	LoadMetricsFromFile("save_metrics.json", metricsStorage)
 	r := chi.NewRouter()
 	r.Use(logger.LoggerMiddleware)
 	contentTypesForCompress := "application/json text/html"
 	r.Use(compressor.GetGzipMiddleware(contentTypesForCompress))
+	
 	r.Get("/", handlers.ShowMetricsSummaryHandler(metricsStorage))
 
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", handlers.UpdateMetricHandler(metricsStorage))
