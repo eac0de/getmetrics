@@ -13,17 +13,19 @@ import (
 	"github.com/eac0de/getmetrics/internal/agent"
 )
 
-type EnvAgentConfig struct {
-	ServerURL      string `env:"ADDRESS"`
-	PollInterval   int    `env:"POLL_INTERVAL"`
-	ReportInterval int    `env:"REPORT_INTERVAL"`
-}
+type (
+	AgentConfig struct {
+		ServerURL      string `env:"ADDRESS"`
+		PollInterval   time.Duration
+		ReportInterval time.Duration
+	}
 
-type AgentConfig struct {
-	ServerURL      string        `env:"ADDRESS"`
-	PollInterval   time.Duration `env:"POLL_INTERVAL"`
-	ReportInterval time.Duration `env:"REPORT_INTERVAL"`
-}
+	EnvAgentConfig struct {
+		AgentConfig
+		PollInterval   int `env:"POLL_INTERVAL"`
+		ReportInterval int `env:"REPORT_INTERVAL"`
+	}
+)
 
 const (
 	defaultServerURL      = "localhost:8080"
@@ -43,23 +45,21 @@ func readAgentFlags(c *AgentConfig) {
 }
 
 func readEnvConfig(c *AgentConfig) {
-	envConfig := new(EnvAgentConfig)
-	err := env.Parse(envConfig)
+	DurationToInt := func(d time.Duration) int {
+		return int(d.Seconds())
+	}
+	envConfig := EnvAgentConfig{
+		AgentConfig:    *c,
+		PollInterval:   DurationToInt(c.PollInterval),
+		ReportInterval: DurationToInt(c.ReportInterval),
+	}
+	err := env.Parse(&envConfig)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if envConfig.ServerURL != "" {
-		c.ServerURL = envConfig.ServerURL
-	}
-
-	if envConfig.PollInterval != 0 {
-		c.PollInterval = time.Duration(envConfig.PollInterval) * time.Second
-	}
-
-	if envConfig.ReportInterval != 0 {
-		c.ReportInterval = time.Duration(envConfig.ReportInterval) * time.Second
-	}
-
+	c.ServerURL = envConfig.ServerURL
+	c.PollInterval = time.Duration(envConfig.PollInterval) * time.Second
+	c.ReportInterval = time.Duration(envConfig.ReportInterval) * time.Second
 }
 
 func main() {
