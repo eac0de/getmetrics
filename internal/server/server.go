@@ -69,4 +69,5 @@ func (s *MetricsServer) Run() {
 		logger.Log.Fatal(err.Error())
 	}
 	<-s.exit
+	SaveMetricsToFile(s.fileStoragePath, metricsStorage)
 }
