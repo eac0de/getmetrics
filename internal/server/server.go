@@ -19,6 +19,7 @@ type MetricsServer struct {
 	restore         bool
 	storeInterval   time.Duration
 	exit            chan struct{}
+	storage         *storage.MetricsStorage
 }
 
 func NewMetricsServer(
@@ -34,10 +35,12 @@ func NewMetricsServer(
 		fileStoragePath: fileStoragePath,
 		restore:         restore,
 		storeInterval:   storeInterval,
+		storage:         storage.NewMetricsStorage(),
 	}
 }
 
 func (s *MetricsServer) Stop() {
+	SaveMetricsToFile(s.fileStoragePath, s.storage)
 	close(s.exit)
 	log.Println("Server stopped.")
 }
@@ -46,28 +49,29 @@ func (s *MetricsServer) Run() {
 	s.exit = make(chan struct{})
 
 	logger.InitLogger(s.logLevel)
-	metricsStorage := storage.NewMetricsStorage()
-	LoadMetricsFromFile(s.fileStoragePath, metricsStorage)
+	err := LoadMetricsFromFile(s.fileStoragePath, s.storage)
+	if err != nil {
+		log.Printf("load metrics error: %s", err.Error())
+	}
 	if s.fileStoragePath != "" {
-		go SaveMetricsToFileGorutine(s, metricsStorage)
+		go SaveMetricsToFileGorutine(s, s.storage)
 	}
 	r := chi.NewRouter()
 	r.Use(logger.LoggerMiddleware)
 	contentTypesForCompress := "application/json text/html"
 	r.Use(compressor.GetGzipMiddleware(contentTypesForCompress))
 
-	r.Get("/", handlers.ShowMetricsSummaryHandler(metricsStorage))
+	r.Get("/", handlers.ShowMetricsSummaryHandler(s.storage))
 
-	r.Post("/update/{metricType}/{metricName}/{metricValue}", handlers.UpdateMetricHandler(metricsStorage))
-	r.Post("/update/", handlers.UpdateMetricJSONHandler(metricsStorage))
+	r.Post("/update/{metricType}/{metricName}/{metricValue}", handlers.UpdateMetricHandler(s.storage))
+	r.Post("/update/", handlers.UpdateMetricJSONHandler(s.storage))
 
-	r.Get("/value/{metricType}/{metricName}", handlers.GetMetricHandler(metricsStorage))
-	r.Post("/value/", handlers.GetMetricJSONHandler(metricsStorage))
+	r.Get("/value/{metricType}/{metricName}", handlers.GetMetricHandler(s.storage))
+	r.Post("/value/", handlers.GetMetricJSONHandler(s.storage))
 	log.Printf("Server http://%s is running. Press Ctrl+C to stop.", s.addr)
-	err := http.ListenAndServe(s.addr, r)
+	err = http.ListenAndServe(s.addr, r)
 	if err != nil {
 		logger.Log.Fatal(err.Error())
 	}
 	<-s.exit
-	SaveMetricsToFile(s.fileStoragePath, metricsStorage)
 }
