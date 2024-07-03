@@ -19,7 +19,7 @@ type compressWriter struct {
 func newCompressWriter(w http.ResponseWriter, contentTypes string) *compressWriter {
 	return &compressWriter{
 		w:            w,
-		zw:           gzip.NewWriter(w),
+		zw:           nil,
 		contentTypes: contentTypes,
 	}
 }
@@ -28,6 +28,7 @@ func (cw *compressWriter) Write(p []byte) (int, error) {
 	contentType := strings.Split(cw.w.Header().Get("Content-Type"), ";")[0]
 	isTypeForCompress := strings.Contains(cw.contentTypes, contentType)
 	if isTypeForCompress {
+		cw.zw = gzip.NewWriter(cw.w)
 		cw.w.Header().Set("Content-Encoding", "gzip")
 		return cw.zw.Write(p)
 	}
@@ -48,9 +49,7 @@ func (cw *compressWriter) WriteHeader(statusCode int) {
 }
 
 func (cw *compressWriter) Close() error {
-	contentType := strings.Split(cw.w.Header().Get("Content-Type"), ";")[0]
-	isTypeForCompress := strings.Contains(cw.contentTypes, contentType)
-	if isTypeForCompress {
+	if cw.zw != nil {
 		return cw.zw.Close()
 	}
 	return nil
