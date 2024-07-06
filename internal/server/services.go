@@ -11,8 +11,13 @@ import (
 	"github.com/eac0de/getmetrics/internal/storage"
 )
 
-func LoadMetricsFromFile(filename string, m *storage.MetricsStorage) error {
-	f, err := os.OpenFile(filename, os.O_CREATE|os.O_RDONLY, 0666)
+type MetricsFileService struct {
+	filename    string
+	metricStore storage.MetricsStorer
+}
+
+func (mfs *MetricsFileService) LoadMetrics() error {
+	f, err := os.OpenFile(mfs.filename, os.O_CREATE|os.O_RDONLY, 0666)
 	if err != nil {
 		return err
 	}
@@ -30,23 +35,39 @@ func LoadMetricsFromFile(filename string, m *storage.MetricsStorage) error {
 
 	// Декодируем JSON
 	decoder := json.NewDecoder(f)
-	metrics := new(models.SystemMetrics)
+	metrics := []models.Metrics{}
 	if err := decoder.Decode(&metrics); err != nil {
 		return err
 	}
 
 	// Сохраняем метрики в хранилище
-	m.SystemMetrics = *metrics
+	for _, metric := range metrics {
+		var value interface{}
+		switch metric.MType {
+		case storage.Gauge:
+			value = *metric.Value
+		case storage.Counter:
+			value = *metric.Delta
+		}
+		_, err := mfs.metricStore.Save(metric.MType, metric.ID, value)
+		if err != nil {
+			fmt.Printf("save metric error: %s", err.Error())
+		}
+	}
 	return nil
 }
 
-func SaveMetricsToFile(filename string, m *storage.MetricsStorage) error {
-	f, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0666)
+func (mfs *MetricsFileService) SaveMetrics() error {
+	f, err := os.OpenFile(mfs.filename, os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	metrics := m.SystemMetrics
+	metrics := mfs.metricStore.GetAll()
+	if metrics == nil {
+		fmt.Println("empty metrics list")
+		return nil
+	}
 	data, err := json.MarshalIndent(metrics, "", "    ")
 	if err != nil {
 		return err
@@ -55,22 +76,25 @@ func SaveMetricsToFile(filename string, m *storage.MetricsStorage) error {
 	if err != nil {
 		return err
 	}
+	fmt.Println("metrics have been preserved")
 	return nil
 }
 
-func SaveMetricsToFileGorutine(s *MetricsServer, m *storage.MetricsStorage) {
+func (mfs *MetricsFileService) SaveMetricsToFileGorutine(s *MetricsServer) {
+	if s.conf.FileStoragePath == "" {
+		return
+	}
 	for {
 		select {
 		case <-s.exit:
 			log.Println("SaveMetricsToFile goroutine is shutting down...")
 			return
 		default:
-			time.Sleep(s.storeInterval)
-			err := SaveMetricsToFile(s.fileStoragePath, m)
+			time.Sleep(s.conf.StoreInterval)
+			err := mfs.SaveMetrics()
 			if err != nil {
 				fmt.Printf("metrics saving error: %s", err.Error())
 			}
-			fmt.Println("metrics have been preserved")
 		}
 
 	}

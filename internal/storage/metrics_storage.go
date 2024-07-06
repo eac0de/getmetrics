@@ -13,12 +13,10 @@ const (
 	Counter = "counter"
 )
 
-type (
-	MetricsStorage struct {
-		mu            sync.Mutex
-		SystemMetrics models.SystemMetrics
-	}
-)
+type MetricsStorage struct {
+	mu            sync.Mutex
+	SystemMetrics models.SystemMetrics
+}
 
 func NewMetricsStorage() *MetricsStorage {
 	return &MetricsStorage{
@@ -118,7 +116,7 @@ func (m *MetricsStorage) GetAll() []*models.Metrics {
 		valueCopy := value
 		metric := models.Metrics{
 			ID:    name,
-			MType: Gauge,
+			MType: Counter,
 			Delta: &valueCopy,
 		}
 		metrics = append(metrics, &metric)

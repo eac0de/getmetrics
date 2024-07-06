@@ -111,7 +111,6 @@ func GetMetricHandler(m storage.MetricsStorer) func(http.ResponseWriter, *http.R
 		var value interface{}
 		switch metric.MType {
 		case storage.Counter:
-
 			value = *metric.Delta
 		case storage.Gauge:
 			value = *metric.Value
