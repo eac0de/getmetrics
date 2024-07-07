@@ -26,6 +26,17 @@ func NewMetricsHandlerService(m MetricsStorer) *metricsHandlerService {
 	}
 }
 
+func RegisterMetricsHandlers(r chi.Router, storage MetricsStorer) {
+	metricsHandlerService := NewMetricsHandlerService(storage)
+	r.Get("/", metricsHandlerService.ShowMetricsSummaryHandler())
+
+	r.Post("/update/{metricType}/{metricName}/{metricValue}", metricsHandlerService.UpdateMetricHandler())
+	r.Post("/update/", metricsHandlerService.UpdateMetricJSONHandler())
+
+	r.Get("/value/{metricType}/{metricName}", metricsHandlerService.GetMetricHandler())
+	r.Post("/value/", metricsHandlerService.GetMetricJSONHandler())
+}
+
 func (mhs *metricsHandlerService) UpdateMetricHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricType := chi.URLParam(r, "metricType")

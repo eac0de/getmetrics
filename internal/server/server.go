@@ -13,22 +13,22 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-type MetricsServer struct {
+type metricsService struct {
 	conf    *config.HTTPServerConfig
 	exit    chan struct{}
 	storage *storage.MetricsStorage
 }
 
-func NewMetricsServer(
+func NewMetricsService(
 	conf *config.HTTPServerConfig,
-	store *storage.MetricsStorage) *MetricsServer {
-	return &MetricsServer{
+	store *storage.MetricsStorage) *metricsService {
+	return &metricsService{
 		conf:    conf,
 		storage: store,
 	}
 }
 
-func (s *MetricsServer) Stop() {
+func (s *metricsService) Stop() {
 	err := s.storage.LoadMetricsFromFile(s.conf.FileStoragePath)
 	if err != nil {
 		fmt.Printf("saving metrics error: %s", err.Error())
@@ -37,7 +37,7 @@ func (s *MetricsServer) Stop() {
 	log.Println("Server stopped.")
 }
 
-func (s *MetricsServer) Run() {
+func (s *metricsService) Run() {
 	logger.InitLogger(s.conf.LogLevel)
 	s.exit = make(chan struct{})
 
@@ -46,20 +46,14 @@ func (s *MetricsServer) Run() {
 		log.Printf("load metrics error: %s", err.Error())
 	}
 	go s.storage.StartSavingMetricsToFile(s.conf.FileStoragePath, s.conf.StoreInterval, s.exit)
+
 	r := chi.NewRouter()
 	r.Use(middlewares.LoggerMiddleware)
 	contentTypesForCompress := "application/json text/html"
 	r.Use(middlewares.GetGzipMiddleware(contentTypesForCompress))
 
-	metricsHandlerService := handlers.NewMetricsHandlerService(s.storage)
+	handlers.RegisterMetricsHandlers(r, s.storage)
 
-	r.Get("/", metricsHandlerService.ShowMetricsSummaryHandler())
-
-	r.Post("/update/{metricType}/{metricName}/{metricValue}", metricsHandlerService.UpdateMetricHandler())
-	r.Post("/update/", metricsHandlerService.UpdateMetricJSONHandler())
-
-	r.Get("/value/{metricType}/{metricName}", metricsHandlerService.GetMetricHandler())
-	r.Post("/value/", metricsHandlerService.GetMetricJSONHandler())
 	log.Printf("Server http://%s is running. Press Ctrl+C to stop.", s.conf.Addr)
 	err = http.ListenAndServe(s.conf.Addr, r)
 	if err != nil {

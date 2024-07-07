@@ -5,20 +5,21 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"reflect"
 	"runtime"
 	"time"
 
 	"github.com/eac0de/getmetrics/internal/config"
 	"github.com/eac0de/getmetrics/internal/models"
+	"github.com/eac0de/getmetrics/internal/storage"
 	"github.com/eac0de/getmetrics/pkg/compressor"
 	"github.com/go-resty/resty/v2"
 )
 
 type Agent struct {
-	conf   *config.AgentConfig
-	client *resty.Client
-	done   chan struct{}
+	conf      *config.AgentConfig
+	client    *resty.Client
+	done      chan struct{}
+	pollCount int64
 }
 
 func NewAgent(conf *config.AgentConfig) *Agent {
@@ -35,7 +36,6 @@ func (a *Agent) Stop() {
 }
 
 func (a *Agent) Run() {
-	var pollCount int64
 	var metrics Metrics
 
 	a.done = make(chan struct{})
@@ -47,7 +47,7 @@ func (a *Agent) Run() {
 				log.Println("Poll goroutine is shutting down...")
 				return
 			default:
-				metrics = a.collectMetrics(&pollCount)
+				metrics = a.collectMetrics()
 				time.Sleep(a.conf.PollInterval)
 			}
 		}
@@ -102,10 +102,10 @@ type Metrics struct {
 	RandomValue   float64 `json:"random_value"`
 }
 
-func (a *Agent) collectMetrics(pollCount *int64) Metrics {
+func (a *Agent) collectMetrics() Metrics {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
-	*pollCount++
+	a.pollCount++
 
 	return Metrics{
 		Alloc:         float64(memStats.Alloc),
@@ -135,36 +135,12 @@ func (a *Agent) collectMetrics(pollCount *int64) Metrics {
 		StackSys:      float64(memStats.MSpanSys),
 		Sys:           float64(memStats.MSpanSys),
 		TotalAlloc:    float64(memStats.MSpanSys),
-		PollCount:     *pollCount,
+		PollCount:     a.pollCount,
 		RandomValue:   float64(memStats.MSpanSys),
 	}
 }
 
-// request format /update/
-func (a *Agent) sendMetric(metricName string, metricValue interface{}) error {
-	url := fmt.Sprintf("%s/update/", a.conf.ServerURL)
-	metric := models.Metrics{
-		ID: metricName,
-	}
-	metricType := reflect.ValueOf(metricValue).Type().Name()
-	switch metricType {
-	case "int64":
-		metric.MType = "counter"
-		value, ok := metricValue.(int64)
-		if !ok {
-			return fmt.Errorf("invalid value for type counter")
-		}
-		metric.Delta = &value
-	case "float64":
-		metric.MType = "gauge"
-		value, ok := metricValue.(float64)
-		if !ok {
-			return fmt.Errorf("invalid value for type gauge")
-		}
-		metric.Value = &value
-	default:
-		return fmt.Errorf("invalid type of value")
-	}
+func (a *Agent) sendMetric(metric *models.Metrics) error {
 	metricJSON, err := json.Marshal(metric)
 	if err != nil {
 		return err
@@ -173,6 +149,7 @@ func (a *Agent) sendMetric(metricName string, metricValue interface{}) error {
 	if err != nil {
 		return err
 	}
+	url := fmt.Sprintf("%s/update/", a.conf.ServerURL)
 	resp, err := a.client.
 		R().
 		SetHeader("Content-Type", "application/json").
@@ -183,46 +160,72 @@ func (a *Agent) sendMetric(metricName string, metricValue interface{}) error {
 		return err
 	}
 	if resp.StatusCode() != http.StatusOK {
-		return fmt.Errorf("error: %s", resp.Error())
+		return fmt.Errorf("%s", resp.Body())
 	}
 	return nil
 }
 
-func (a *Agent) sendMetrics(metrics Metrics) {
-	values := map[string]interface{}{
-		"Alloc":         metrics.Alloc,
-		"BuckHashSys":   metrics.BuckHashSys,
-		"Frees":         metrics.Frees,
-		"GCCPUFraction": metrics.GCCPUFraction,
-		"GCSys":         metrics.GCSys,
-		"HeapAlloc":     metrics.HeapAlloc,
-		"HeapIdle":      metrics.HeapIdle,
-		"HeapInuse":     metrics.HeapInuse,
-		"HeapObjects":   metrics.HeapObjects,
-		"HeapReleased":  metrics.HeapReleased,
-		"HeapSys":       metrics.HeapSys,
-		"LastGC":        metrics.LastGC,
-		"Lookups":       metrics.Lookups,
-		"MCacheInuse":   metrics.MCacheInuse,
-		"MCacheSys":     metrics.MCacheSys,
-		"MSpanInuse":    metrics.MSpanInuse,
-		"MSpanSys":      metrics.MSpanSys,
-		"Mallocs":       metrics.Mallocs,
-		"NextGC":        metrics.NextGC,
-		"NumForcedGC":   metrics.NumForcedGC,
-		"NumGC":         metrics.NumGC,
-		"OtherSys":      metrics.OtherSys,
-		"PauseTotalNs":  metrics.PauseTotalNs,
-		"StackInuse":    metrics.StackInuse,
-		"StackSys":      metrics.StackSys,
-		"Sys":           metrics.Sys,
-		"TotalAlloc":    metrics.TotalAlloc,
-		"PollCount":     metrics.PollCount,
-		"RandomValue":   metrics.RandomValue,
+func (a *Agent) sendCounterMetric(metricName string, delta int64) error {
+	metric := models.Metrics{
+		ID:    metricName,
+		MType: storage.Counter,
+		Delta: &delta,
 	}
+	return a.sendMetric(&metric)
+}
 
-	for metricName, metricValue := range values {
-		if err := a.sendMetric(metricName, metricValue); err != nil {
+func (a *Agent) sendGaugeMetric(metricName string, value float64) error {
+	metric := models.Metrics{
+		ID:    metricName,
+		MType: storage.Gauge,
+		Value: &value,
+	}
+	return a.sendMetric(&metric)
+}
+
+func (a *Agent) sendMetrics(metrics Metrics) {
+	values := models.SystemMetrics{
+		Gauge: map[string]float64{
+			"Alloc":         metrics.Alloc,
+			"BuckHashSys":   metrics.BuckHashSys,
+			"Frees":         metrics.Frees,
+			"GCCPUFraction": metrics.GCCPUFraction,
+			"GCSys":         metrics.GCSys,
+			"HeapAlloc":     metrics.HeapAlloc,
+			"HeapIdle":      metrics.HeapIdle,
+			"HeapInuse":     metrics.HeapInuse,
+			"HeapObjects":   metrics.HeapObjects,
+			"HeapReleased":  metrics.HeapReleased,
+			"HeapSys":       metrics.HeapSys,
+			"LastGC":        metrics.LastGC,
+			"Lookups":       metrics.Lookups,
+			"MCacheInuse":   metrics.MCacheInuse,
+			"MCacheSys":     metrics.MCacheSys,
+			"MSpanInuse":    metrics.MSpanInuse,
+			"MSpanSys":      metrics.MSpanSys,
+			"Mallocs":       metrics.Mallocs,
+			"NextGC":        metrics.NextGC,
+			"NumForcedGC":   metrics.NumForcedGC,
+			"NumGC":         metrics.NumGC,
+			"OtherSys":      metrics.OtherSys,
+			"PauseTotalNs":  metrics.PauseTotalNs,
+			"StackInuse":    metrics.StackInuse,
+			"StackSys":      metrics.StackSys,
+			"Sys":           metrics.Sys,
+			"TotalAlloc":    metrics.TotalAlloc,
+			"RandomValue":   metrics.RandomValue,
+		},
+		Counter: map[string]int64{
+			"PollCount": metrics.PollCount,
+		},
+	}
+	for metricName, metricValue := range values.Gauge {
+		if err := a.sendGaugeMetric(metricName, metricValue); err != nil {
+			fmt.Printf("failed to send metric %s: %s\n", metricName, err.Error())
+		}
+	}
+	for metricName, metricDelta := range values.Counter {
+		if err := a.sendCounterMetric(metricName, metricDelta); err != nil {
 			fmt.Printf("failed to send metric %s: %s\n", metricName, err.Error())
 		}
 	}

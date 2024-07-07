@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,10 +12,8 @@ import (
 
 func main() {
 	serverConfig := config.NewHTTPServerConfig()
-	source, _ := os.Getwd()
-	fmt.Println("pwd: ", source)
 	storage := storage.NewMetricsStorage()
-	s := server.NewMetricsServer(serverConfig, storage)
+	s := server.NewMetricsService(serverConfig, storage)
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT)
 	go func() {

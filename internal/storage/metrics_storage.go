@@ -40,12 +40,12 @@ func (m *MetricsStorage) Save(metricType string, metricName string, metricValue 
 	case Gauge:
 		metricValueFloat, ok := metricValue.(float64)
 		if !ok {
-			if valueStr, ok := metricValue.(string); ok {
-				metricValueFloat, err = strconv.ParseFloat(valueStr, 64)
-				if err != nil {
-					return nil, fmt.Errorf("invalid value type for guage metric(1)")
-				}
-			} else {
+			valueStr, ok := metricValue.(string)
+			if !ok {
+				return nil, fmt.Errorf("invalid value type for guage metric(1)")
+			}
+			metricValueFloat, err = strconv.ParseFloat(valueStr, 64)
+			if err != nil {
 				return nil, fmt.Errorf("invalid value type for guage metric(2)")
 			}
 		}
@@ -55,12 +55,12 @@ func (m *MetricsStorage) Save(metricType string, metricName string, metricValue 
 	case Counter:
 		metricValueInt, ok := metricValue.(int64)
 		if !ok {
-			if valueStr, ok := metricValue.(string); ok {
-				metricValueInt, err = strconv.ParseInt(valueStr, 10, 64)
-				if err != nil {
-					return nil, fmt.Errorf("invalid value type for counter metric(1)")
-				}
-			} else {
+			valueStr, ok := metricValue.(string)
+			if !ok {
+				return nil, fmt.Errorf("invalid value type for counter metric(1)")
+			}
+			metricValueInt, err = strconv.ParseInt(valueStr, 10, 64)
+			if err != nil {
 				return nil, fmt.Errorf("invalid value type for counter metric(2)")
 			}
 		}
