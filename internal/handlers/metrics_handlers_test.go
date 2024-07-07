@@ -193,7 +193,7 @@ func TestUpdateMetricJSONHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 			metricsStorage := storage.NewMetricsStorage()
 			mhs := NewMetricsHandlerService(metricsStorage)
-			mhs.UpdateMetricHandler()(w, r)
+			mhs.UpdateMetricJSONHandler()(w, r)
 			resp := w.Result()
 			defer resp.Body.Close()
 			assert.Equal(t, test.want.status, resp.StatusCode)

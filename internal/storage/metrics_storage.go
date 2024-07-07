@@ -128,7 +128,7 @@ func (m *MetricsStorage) GetAll() []*models.Metrics {
 	return metrics
 }
 
-func (ms *MetricsStorage) LoadMetricsFromFile(filename string) error {
+func (m *MetricsStorage) LoadMetricsFromFile(filename string) error {
 	f, err := os.OpenFile(filename, os.O_CREATE|os.O_RDONLY, 0666)
 	if err != nil {
 		return err
@@ -145,19 +145,19 @@ func (ms *MetricsStorage) LoadMetricsFromFile(filename string) error {
 		return nil
 	}
 	decoder := json.NewDecoder(f)
-	if err := decoder.Decode(&ms.SystemMetrics); err != nil {
+	if err := decoder.Decode(&m.SystemMetrics); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (ms *MetricsStorage) SaveMetricsToFile(filename string) error {
+func (m *MetricsStorage) SaveMetricsToFile(filename string) error {
 	f, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	data, err := json.MarshalIndent(ms.SystemMetrics, "", "    ")
+	data, err := json.MarshalIndent(m.SystemMetrics, "", "    ")
 	if err != nil {
 		return err
 	}
@@ -169,7 +169,7 @@ func (ms *MetricsStorage) SaveMetricsToFile(filename string) error {
 	return nil
 }
 
-func (ms *MetricsStorage) StartSavingMetricsToFile(filename string, interval time.Duration, exit chan struct{}) {
+func (m *MetricsStorage) StartSavingMetricsToFile(filename string, interval time.Duration, exit chan struct{}) {
 	if filename == "" {
 		return
 	}
@@ -180,7 +180,7 @@ func (ms *MetricsStorage) StartSavingMetricsToFile(filename string, interval tim
 			return
 		default:
 			time.Sleep(interval)
-			err := ms.SaveMetricsToFile(filename)
+			err := m.SaveMetricsToFile(filename)
 			if err != nil {
 				fmt.Printf("metrics saving error: %s", err.Error())
 			}
