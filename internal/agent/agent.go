@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -18,7 +19,7 @@ import (
 type Agent struct {
 	conf      *config.AgentConfig
 	client    *resty.Client
-	done      chan struct{}
+	metrics   *Metrics
 	pollCount int64
 }
 
@@ -31,43 +32,45 @@ func NewAgent(conf *config.AgentConfig) *Agent {
 	}
 }
 
-func (a *Agent) Stop() {
-	close(a.done)
+func (a *Agent) Stop(cancel context.CancelFunc) {
+	cancel()
+	log.Println("Agent stopped.")
 }
 
-func (a *Agent) Run() {
-	var metrics Metrics
+func (a *Agent) Run(ctx context.Context) {
 
-	a.done = make(chan struct{})
+	go a.StartPoll(ctx)
 
-	go func() {
-		for {
-			select {
-			case <-a.done:
-				log.Println("Poll goroutine is shutting down...")
-				return
-			default:
-				metrics = a.collectMetrics()
-				time.Sleep(a.conf.PollInterval)
-			}
-		}
-	}()
-
-	go func() {
-		for {
-			select {
-			case <-a.done:
-				log.Println("Report goroutine is shutting down...")
-				return
-			default:
-				a.sendMetrics(metrics)
-				time.Sleep(a.conf.ReportInterval)
-			}
-		}
-	}()
+	go a.StartSendReport(ctx)
 
 	log.Println("Agent is running. Press Ctrl+C to stop.")
-	<-a.done // Блокируемся до закрытия канала done
+	<-ctx.Done() // Блокируемся до закрытия канала done
+}
+
+func (a *Agent) StartPoll(ctx context.Context) {
+	ticker := time.NewTicker(a.conf.PollInterval)
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("Poll goroutine is shutting down...")
+			return
+		case <-ticker.C:
+			a.metrics = a.collectMetrics()
+		}
+	}
+}
+
+func (a *Agent) StartSendReport(ctx context.Context) {
+	ticker := time.NewTicker(a.conf.ReportInterval)
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("Report goroutine is shutting down...")
+			return
+		case <-ticker.C:
+			a.sendMetrics(a.metrics)
+		}
+	}
 }
 
 type Metrics struct {
@@ -102,12 +105,11 @@ type Metrics struct {
 	RandomValue   float64 `json:"random_value"`
 }
 
-func (a *Agent) collectMetrics() Metrics {
+func (a *Agent) collectMetrics() *Metrics {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 	a.pollCount++
-
-	return Metrics{
+	return &Metrics{
 		Alloc:         float64(memStats.Alloc),
 		BuckHashSys:   float64(memStats.BuckHashSys),
 		Frees:         float64(memStats.Frees),
@@ -183,7 +185,7 @@ func (a *Agent) sendGaugeMetric(metricName string, value float64) error {
 	return a.sendMetric(&metric)
 }
 
-func (a *Agent) sendMetrics(metrics Metrics) {
+func (a *Agent) sendMetrics(metrics *Metrics) {
 	values := models.SystemMetrics{
 		Gauge: map[string]float64{
 			"Alloc":         metrics.Alloc,

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"context"
 	"os"
 	"os/signal"
 	"syscall"
@@ -11,14 +11,15 @@ import (
 )
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	agentConfig := config.NewAgentConfig()
 	a := agent.NewAgent(agentConfig)
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT)
 	go func() {
-		a.Run()
+		a.Run(ctx)
 	}()
 	<-sigChan
-	a.Stop()
-	log.Println("Agent stopped.")
+	a.Stop(cancel)
 }

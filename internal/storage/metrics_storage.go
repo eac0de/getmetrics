@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -165,21 +166,21 @@ func (m *MetricsStorage) SaveMetricsToFile(filename string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("metrics have been preserved")
+	log.Println("metrics have been preserved")
 	return nil
 }
 
-func (m *MetricsStorage) StartSavingMetricsToFile(filename string, interval time.Duration, exit chan struct{}) {
+func (m *MetricsStorage) StartSavingMetricsToFile(ctx context.Context, filename string, interval time.Duration) {
 	if filename == "" {
 		return
 	}
+	ticker := time.NewTicker(interval)
 	for {
 		select {
-		case <-exit:
+		case <-ctx.Done():
 			log.Println("SaveMetricsToFile goroutine is shutting down...")
 			return
-		default:
-			time.Sleep(interval)
+		case <-ticker.C:
 			err := m.SaveMetricsToFile(filename)
 			if err != nil {
 				fmt.Printf("metrics saving error: %s", err.Error())

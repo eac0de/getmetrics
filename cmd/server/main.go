@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"syscall"
@@ -11,14 +12,16 @@ import (
 )
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	serverConfig := config.NewHTTPServerConfig()
 	storage := storage.NewMetricsStorage()
 	s := server.NewMetricsService(serverConfig, storage)
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT)
 	go func() {
-		s.Run()
+		s.Run(ctx)
 	}()
 	<-sigChan
-	s.Stop()
+	s.Stop(cancel)
 }

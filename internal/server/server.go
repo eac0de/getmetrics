@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -15,37 +16,35 @@ import (
 
 type metricsService struct {
 	conf    *config.HTTPServerConfig
-	exit    chan struct{}
 	storage *storage.MetricsStorage
 }
 
 func NewMetricsService(
 	conf *config.HTTPServerConfig,
-	store *storage.MetricsStorage) *metricsService {
+	storage *storage.MetricsStorage) *metricsService {
 	return &metricsService{
 		conf:    conf,
-		storage: store,
+		storage: storage,
 	}
 }
 
-func (s *metricsService) Stop() {
-	err := s.storage.LoadMetricsFromFile(s.conf.FileStoragePath)
+func (s *metricsService) Stop(cancel context.CancelFunc) {
+	err := s.storage.SaveMetricsToFile(s.conf.FileStoragePath)
 	if err != nil {
 		fmt.Printf("saving metrics error: %s", err.Error())
 	}
-	close(s.exit)
+	cancel()
 	log.Println("Server stopped.")
 }
 
-func (s *metricsService) Run() {
+func (s *metricsService) Run(ctx context.Context) {
 	logger.InitLogger(s.conf.LogLevel)
-	s.exit = make(chan struct{})
 
 	err := s.storage.LoadMetricsFromFile(s.conf.FileStoragePath)
 	if err != nil {
 		log.Printf("load metrics error: %s", err.Error())
 	}
-	go s.storage.StartSavingMetricsToFile(s.conf.FileStoragePath, s.conf.StoreInterval, s.exit)
+	go s.storage.StartSavingMetricsToFile(ctx, s.conf.FileStoragePath, s.conf.StoreInterval)
 
 	r := chi.NewRouter()
 	r.Use(middlewares.LoggerMiddleware)
