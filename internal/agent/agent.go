@@ -9,27 +9,24 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/eac0de/getmetrics/internal/compressor"
+	"github.com/eac0de/getmetrics/internal/config"
 	"github.com/eac0de/getmetrics/internal/models"
+	"github.com/eac0de/getmetrics/pkg/compressor"
 	"github.com/go-resty/resty/v2"
 )
 
 type Agent struct {
-	serverURL      string
-	client         *resty.Client
-	pollInterval   time.Duration
-	reportInterval time.Duration
-	done           chan struct{}
+	conf   *config.AgentConfig
+	client *resty.Client
+	done   chan struct{}
 }
 
-func NewAgent(serverURL string, pollInterval time.Duration, reportInterval time.Duration) *Agent {
-	serverURL = "http://" + serverURL
+func NewAgent(conf *config.AgentConfig) *Agent {
+	conf.ServerURL = "http://" + conf.ServerURL
 	client := resty.New()
 	return &Agent{
-		serverURL:      serverURL,
-		client:         client,
-		pollInterval:   pollInterval,
-		reportInterval: reportInterval,
+		conf:   conf,
+		client: client,
 	}
 }
 
@@ -51,7 +48,7 @@ func (a *Agent) Run() {
 				return
 			default:
 				metrics = a.collectMetrics(&pollCount)
-				time.Sleep(a.pollInterval)
+				time.Sleep(a.conf.PollInterval)
 			}
 		}
 	}()
@@ -64,7 +61,7 @@ func (a *Agent) Run() {
 				return
 			default:
 				a.sendMetrics(metrics)
-				time.Sleep(a.reportInterval)
+				time.Sleep(a.conf.ReportInterval)
 			}
 		}
 	}()
@@ -145,7 +142,7 @@ func (a *Agent) collectMetrics(pollCount *int64) Metrics {
 
 // request format /update/
 func (a *Agent) sendMetric(metricName string, metricValue interface{}) error {
-	url := fmt.Sprintf("%s/update/", a.serverURL)
+	url := fmt.Sprintf("%s/update/", a.conf.ServerURL)
 	metric := models.Metrics{
 		ID: metricName,
 	}

@@ -13,11 +13,8 @@ import (
 
 func main() {
 	serverConfig := config.NewHTTPServerConfig()
-	fmt.Println("Addr:", serverConfig.Addr)
-	fmt.Println("LogLevel:", serverConfig.LogLevel)
-	fmt.Println("FileStoragePath:", serverConfig.FileStoragePath)
-	fmt.Println("Restore:", serverConfig.Restore)
-	fmt.Println("StoreInterval:", serverConfig.StoreInterval)
+	source, _ := os.Getwd()
+	fmt.Println("pwd: ", source)
 	storage := storage.NewMetricsStorage()
 	s := server.NewMetricsServer(serverConfig, storage)
 	sigChan := make(chan os.Signal, 1)

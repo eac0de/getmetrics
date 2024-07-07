@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 
 	"github.com/eac0de/getmetrics/internal/models"
@@ -13,7 +16,17 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func UpdateMetricHandler(m storage.MetricsStorer) func(http.ResponseWriter, *http.Request) {
+type metricsHandlerService struct {
+	metricsStore MetricsStorer
+}
+
+func NewMetricsHandlerService(m MetricsStorer) *metricsHandlerService {
+	return &metricsHandlerService{
+		metricsStore: m,
+	}
+}
+
+func (mhs *metricsHandlerService) UpdateMetricHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricType := chi.URLParam(r, "metricType")
 		metricName := chi.URLParam(r, "metricName")
@@ -23,7 +36,7 @@ func UpdateMetricHandler(m storage.MetricsStorer) func(http.ResponseWriter, *htt
 			http.Error(w, "metric name is required", http.StatusNotFound)
 			return
 		}
-		metric, err := m.Save(metricType, metricName, metricValue)
+		metric, err := mhs.metricsStore.Save(metricType, metricName, metricValue)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -43,7 +56,7 @@ func UpdateMetricHandler(m storage.MetricsStorer) func(http.ResponseWriter, *htt
 	}
 }
 
-func UpdateMetricJSONHandler(m storage.MetricsStorer) func(http.ResponseWriter, *http.Request) {
+func (mhs *metricsHandlerService) UpdateMetricJSONHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var newMetric models.Metrics
 		var buf bytes.Buffer
@@ -81,7 +94,7 @@ func UpdateMetricJSONHandler(m storage.MetricsStorer) func(http.ResponseWriter, 
 			http.Error(w, "invalid metric type", http.StatusBadRequest)
 			return
 		}
-		metric, err := m.Save(metricType, metricName, metricValue)
+		metric, err := mhs.metricsStore.Save(metricType, metricName, metricValue)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -93,7 +106,7 @@ func UpdateMetricJSONHandler(m storage.MetricsStorer) func(http.ResponseWriter, 
 	}
 }
 
-func GetMetricHandler(m storage.MetricsStorer) func(http.ResponseWriter, *http.Request) {
+func (mhs *metricsHandlerService) GetMetricHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricName := chi.URLParam(r, "metricName")
 		metricType := chi.URLParam(r, "metricType")
@@ -102,7 +115,7 @@ func GetMetricHandler(m storage.MetricsStorer) func(http.ResponseWriter, *http.R
 			http.Error(w, "metric name is required", http.StatusNotFound)
 			return
 		}
-		metric := m.Get(metricType, metricName)
+		metric := mhs.metricsStore.Get(metricType, metricName)
 		errorMessage := fmt.Sprintf("metric %s not found", metricName)
 		if metric == nil {
 			http.Error(w, errorMessage, http.StatusNotFound)
@@ -122,7 +135,7 @@ func GetMetricHandler(m storage.MetricsStorer) func(http.ResponseWriter, *http.R
 	}
 }
 
-func GetMetricJSONHandler(m storage.MetricsStorer) func(http.ResponseWriter, *http.Request) {
+func (mhs *metricsHandlerService) GetMetricJSONHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var newMetric models.Metrics
 		var buf bytes.Buffer
@@ -142,7 +155,7 @@ func GetMetricJSONHandler(m storage.MetricsStorer) func(http.ResponseWriter, *ht
 			http.Error(w, "metric name is required", http.StatusNotFound)
 			return
 		}
-		metric := m.Get(metricType, metricName)
+		metric := mhs.metricsStore.Get(metricType, metricName)
 		errorMessage := fmt.Sprintf("metric %s not found", metricName)
 		if metric == nil {
 			http.Error(w, errorMessage, http.StatusNotFound)
@@ -155,61 +168,20 @@ func GetMetricJSONHandler(m storage.MetricsStorer) func(http.ResponseWriter, *ht
 	}
 }
 
-const metricsTemplate = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Metric Summary</title>
-    <style>
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background-color: #f0f0f0;
-        }
-        .container {
-            height: 80%;
-            text-align: center;
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            overflow-y: auto;
-        }
-        .metrics {
-            margin-top: 20px;
-        }
-        h1 {
-            margin-bottom: 20px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Metric Summary</h1>
-        <div class="metrics">
-            {{range .}}
-				{{if eq .MType "gauge"}}
-                <p><strong>{{.ID}}</strong> - {{.Value}}</p>
-				{{else}}
-				<p><strong>{{.ID}}</strong> - {{.Delta}}</p>
-				{{end}}
-            {{end}}
-        </div>
-    </div>
-</body>
-</html>
-`
-
-func ShowMetricsSummaryHandler(m storage.MetricsStorer) func(http.ResponseWriter, *http.Request) {
+func (mhs *metricsHandlerService) ShowMetricsSummaryHandler() func(http.ResponseWriter, *http.Request) {
+	fpath := filepath.Join("templates", "metrics_summary.html")
+	file, err := os.OpenFile(fpath, os.O_RDONLY, 0666)
+	if err != nil {
+		fmt.Printf("read template error(1): %s", err.Error())
+	}
+	temp, err := io.ReadAll(file)
+	if err != nil {
+		fmt.Printf("read template error(2): %s", err.Error())
+	}
+	metricsTemplate := string(temp)
 	tmpl := template.Must(template.New("metrics").Parse(metricsTemplate))
 	return func(w http.ResponseWriter, r *http.Request) {
-		metrics := m.GetAll()
+		metrics := mhs.metricsStore.GetAll()
 		sort.Slice(metrics, func(i, j int) bool {
 			return metrics[i].ID < metrics[j].ID
 		})

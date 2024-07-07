@@ -2,7 +2,6 @@ package config
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"time"
@@ -27,11 +26,8 @@ type EnvHTTPServerConfig struct {
 func NewHTTPServerConfig() *HTTPServerConfig {
 	config := new(HTTPServerConfig)
 	config.ReadYAML("local_config.yml")
-	fmt.Println(*config)
 	config.ReadServerFlags()
-	fmt.Println(*config)
 	config.ReadEnvConfig()
-	fmt.Println(*config)
 	return config
 }
 

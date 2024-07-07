@@ -1,9 +1,13 @@
 package storage
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
+	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/eac0de/getmetrics/internal/models"
 )
@@ -122,4 +126,66 @@ func (m *MetricsStorage) GetAll() []*models.Metrics {
 		metrics = append(metrics, &metric)
 	}
 	return metrics
+}
+
+func (ms *MetricsStorage) LoadMetricsFromFile(filename string) error {
+	f, err := os.OpenFile(filename, os.O_CREATE|os.O_RDONLY, 0666)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// Проверяем, что файл не пустой
+	fi, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	if fi.Size() == 0 {
+		// Если файл пустой, возвращаем nil, так как это не ошибка
+		return nil
+	}
+	decoder := json.NewDecoder(f)
+	if err := decoder.Decode(&ms.SystemMetrics); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (ms *MetricsStorage) SaveMetricsToFile(filename string) error {
+	f, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	data, err := json.MarshalIndent(ms.SystemMetrics, "", "    ")
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(data)
+	if err != nil {
+		return err
+	}
+	fmt.Println("metrics have been preserved")
+	return nil
+}
+
+func (ms *MetricsStorage) StartSavingMetricsToFile(filename string, interval time.Duration, exit chan struct{}) {
+	if filename == "" {
+		return
+	}
+	for {
+		select {
+		case <-exit:
+			log.Println("SaveMetricsToFile goroutine is shutting down...")
+			return
+		default:
+			time.Sleep(interval)
+			err := ms.SaveMetricsToFile(filename)
+			if err != nil {
+				fmt.Printf("metrics saving error: %s", err.Error())
+			}
+		}
+
+	}
+
 }
