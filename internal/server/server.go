@@ -1,36 +1,61 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 
+	"github.com/eac0de/getmetrics/internal/config"
 	"github.com/eac0de/getmetrics/internal/handlers"
+	"github.com/eac0de/getmetrics/internal/logger"
+	"github.com/eac0de/getmetrics/internal/middlewares"
 	"github.com/eac0de/getmetrics/internal/storage"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 )
 
-type MetricsServer struct {
-	addr string
+type metricsService struct {
+	conf    *config.HTTPServerConfig
+	storage *storage.MetricsStorage
 }
 
-func NewMetricsServer(addr string) *MetricsServer {
-	return &MetricsServer{
-		addr: addr,
+func NewMetricsService(
+	conf *config.HTTPServerConfig,
+	storage *storage.MetricsStorage) *metricsService {
+	return &metricsService{
+		conf:    conf,
+		storage: storage,
 	}
 }
 
-func (s *MetricsServer) Run() {
-	metricsStorage := storage.NewMetricsStorage()
-	r := chi.NewRouter()
-	r.Use(middleware.Logger)
-	r.Get("/", handlers.ShowMetricsSummaryHandler(metricsStorage))
-	r.Post("/update/{metricType}/{metricName}/{metricValue}", handlers.UpdateMetricHandler(metricsStorage))
-	r.Get("/value/{metricType}/{metricName}", handlers.GetMetricHandler(metricsStorage))
-	fmt.Printf("Server started on http://%s\n", s.addr)
-	err := http.ListenAndServe(s.addr, r)
+func (s *metricsService) Stop(cancel context.CancelFunc) {
+	err := s.storage.SaveMetricsToFile(s.conf.FileStoragePath)
 	if err != nil {
-		log.Fatal(err.Error())
+		fmt.Printf("saving metrics error: %s", err.Error())
+	}
+	cancel()
+	log.Println("Server stopped.")
+}
+
+func (s *metricsService) Run(ctx context.Context) {
+	logger.InitLogger(s.conf.LogLevel)
+
+	err := s.storage.LoadMetricsFromFile(s.conf.FileStoragePath)
+	if err != nil {
+		log.Printf("load metrics error: %s", err.Error())
+	}
+	go s.storage.StartSavingMetricsToFile(ctx, s.conf.FileStoragePath, s.conf.StoreInterval)
+
+	r := chi.NewRouter()
+	r.Use(middlewares.LoggerMiddleware)
+	contentTypesForCompress := "application/json text/html"
+	r.Use(middlewares.GetGzipMiddleware(contentTypesForCompress))
+
+	handlers.RegisterMetricsHandlers(r, s.storage)
+
+	log.Printf("Server http://%s is running. Press Ctrl+C to stop.", s.conf.Addr)
+	err = http.ListenAndServe(s.conf.Addr, r)
+	if err != nil {
+		logger.Log.Fatal(err.Error())
 	}
 }

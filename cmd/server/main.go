@@ -1,38 +1,27 @@
 package main
 
 import (
-	"flag"
-	"log"
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
 
-	"github.com/caarlos0/env/v6"
+	"github.com/eac0de/getmetrics/internal/config"
 	"github.com/eac0de/getmetrics/internal/server"
+	"github.com/eac0de/getmetrics/internal/storage"
 )
-
-type HTTPServerConfig struct {
-	Addr string `env:"ADDRESS"`
-}
-
-const (
-	defaultAddr = "localhost:8080"
-)
-
-func readServerFlags(c *HTTPServerConfig) {
-	flag.StringVar(&c.Addr, "a", defaultAddr, "server address")
-
-	flag.Parse()
-}
-
-func readEnvConfig(c *HTTPServerConfig) {
-	err := env.Parse(c)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
 
 func main() {
-	serverConfig := new(HTTPServerConfig)
-	readServerFlags(serverConfig)
-	readEnvConfig(serverConfig)
-	s := server.NewMetricsServer(serverConfig.Addr)
-	s.Run()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	serverConfig := config.NewHTTPServerConfig()
+	storage := storage.NewMetricsStorage()
+	s := server.NewMetricsService(serverConfig, storage)
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT)
+	go func() {
+		s.Run(ctx)
+	}()
+	<-sigChan
+	s.Stop(cancel)
 }
