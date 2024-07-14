@@ -100,7 +100,7 @@ func TestUpdateMetricHandler(t *testing.T) {
 			r := httptest.NewRequest(http.MethodPost, url, nil)
 			r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, test.context))
 			w := httptest.NewRecorder()
-			metricsStorage := storage.NewMetricsStorage()
+			metricsStorage := storage.NewMetricsStorage("")
 			mhs := NewMetricsHandlerService(metricsStorage)
 			mhs.UpdateMetricHandler()(w, r)
 			resp := w.Result()
@@ -191,7 +191,7 @@ func TestUpdateMetricJSONHandler(t *testing.T) {
 			}
 			r := httptest.NewRequest(http.MethodPost, url, &buf)
 			w := httptest.NewRecorder()
-			metricsStorage := storage.NewMetricsStorage()
+			metricsStorage := storage.NewMetricsStorage("")
 			mhs := NewMetricsHandlerService(metricsStorage)
 			mhs.UpdateMetricJSONHandler()(w, r)
 			resp := w.Result()

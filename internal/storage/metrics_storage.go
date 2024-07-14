@@ -23,13 +23,20 @@ type MetricsStorage struct {
 	SystemMetrics models.SystemMetrics
 }
 
-func NewMetricsStorage() *MetricsStorage {
-	return &MetricsStorage{
+func NewMetricsStorage(filename string) *MetricsStorage {
+	ms := MetricsStorage{
 		SystemMetrics: models.SystemMetrics{
 			Counter: map[string]int64{},
 			Gauge:   map[string]float64{},
 		},
 	}
+	if filename != "" {
+		err := ms.LoadMetricsFromFile(filename)
+		if err != nil {
+			log.Printf("load metrics error: %s", err.Error())
+		}
+	}
+	return &ms
 }
 
 func (m *MetricsStorage) Save(metricType string, metricName string, metricValue interface{}) (*models.Metrics, error) {
