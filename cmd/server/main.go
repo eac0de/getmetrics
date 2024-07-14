@@ -15,8 +15,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	serverConfig := config.NewHTTPServerConfig()
-	storage := storage.NewMetricsStorage(serverConfig.FileStoragePath)
-	s := server.NewMetricsService(serverConfig, storage)
+	s := server.NewMetricsService(serverConfig)
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT)
 	go func() {

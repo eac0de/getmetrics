@@ -86,7 +86,7 @@ func (m *MetricsStorage) Save(metricType string, metricName string, metricValue 
 	return &metric, nil
 }
 
-func (m *MetricsStorage) Get(metricType string, metricName string) *models.Metrics {
+func (m *MetricsStorage) Get(metricType string, metricName string) (*models.Metrics, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var metric models.Metrics
@@ -94,26 +94,26 @@ func (m *MetricsStorage) Get(metricType string, metricName string) *models.Metri
 	case Gauge:
 		value, ok := m.SystemMetrics.Gauge[metricName]
 		if !ok {
-			return nil
+			return nil, fmt.Errorf("metric not found")
 		}
 		metric.Value = &value
 		metric.MType = Gauge
 	case Counter:
 		value, ok := m.SystemMetrics.Counter[metricName]
 		if !ok {
-			return nil
+			return nil, fmt.Errorf("metric not found")
 		}
 		metric.Delta = &value
 		metric.MType = Counter
 	default:
 		// Обработка некорректного типа метрики
-		return nil
+		return nil, fmt.Errorf("invalid type")
 	}
 	metric.ID = metricName
-	return &metric
+	return &metric, nil
 }
 
-func (m *MetricsStorage) GetAll() []*models.Metrics {
+func (m *MetricsStorage) GetAll() ([]*models.Metrics, error) {
 	var metrics []*models.Metrics
 	for name, value := range m.SystemMetrics.Gauge {
 		valueCopy := value
@@ -133,7 +133,7 @@ func (m *MetricsStorage) GetAll() []*models.Metrics {
 		}
 		metrics = append(metrics, &metric)
 	}
-	return metrics
+	return metrics, nil
 }
 
 func (m *MetricsStorage) LoadMetricsFromFile(filename string) error {
@@ -185,6 +185,10 @@ func (m *MetricsStorage) StartSavingMetricsToFile(ctx context.Context, filename 
 	for {
 		select {
 		case <-ctx.Done():
+			err := m.SaveMetricsToFile(filename)
+			if err != nil {
+				fmt.Printf("saving metrics error: %s", err.Error())
+			}
 			log.Println("SaveMetricsToFile goroutine is shutting down...")
 			return
 		case <-ticker.C:

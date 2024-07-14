@@ -126,7 +126,7 @@ func (mhs *metricsHandlerService) GetMetricHandler() func(http.ResponseWriter, *
 			http.Error(w, "metric name is required", http.StatusNotFound)
 			return
 		}
-		metric := mhs.metricsStore.Get(metricType, metricName)
+		metric, _ := mhs.metricsStore.Get(metricType, metricName)
 		errorMessage := fmt.Sprintf("metric %s not found", metricName)
 		if metric == nil {
 			http.Error(w, errorMessage, http.StatusNotFound)
@@ -166,9 +166,9 @@ func (mhs *metricsHandlerService) GetMetricJSONHandler() func(http.ResponseWrite
 			http.Error(w, "metric name is required", http.StatusNotFound)
 			return
 		}
-		metric := mhs.metricsStore.Get(metricType, metricName)
-		errorMessage := fmt.Sprintf("metric %s not found", metricName)
+		metric, _ := mhs.metricsStore.Get(metricType, metricName)
 		if metric == nil {
+			errorMessage := fmt.Sprintf("metric %s not found", metricName)
 			http.Error(w, errorMessage, http.StatusNotFound)
 			return
 		}
@@ -192,13 +192,17 @@ func (mhs *metricsHandlerService) ShowMetricsSummaryHandler() func(http.Response
 	metricsTemplate := string(temp)
 	tmpl := template.Must(template.New("metrics").Parse(metricsTemplate))
 	return func(w http.ResponseWriter, r *http.Request) {
-		metrics := mhs.metricsStore.GetAll()
+		metrics, err := mhs.metricsStore.GetAll()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		sort.Slice(metrics, func(i, j int) bool {
 			return metrics[i].ID < metrics[j].ID
 		})
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		err := tmpl.Execute(w, metrics)
+		err = tmpl.Execute(w, metrics)
 		if err != nil {
 			http.Error(w, "error rendering template", http.StatusInternalServerError)
 			return

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/eac0de/getmetrics/internal/database"
+	"github.com/eac0de/getmetrics/internal/storage"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -26,16 +26,16 @@ func main() {
 }
 
 type databaseHandlerService struct {
-	Database *database.DatabaseSQL
+	Database *storage.DatabaseSQL
 }
 
-func NewDatabaseHandlerService(database *database.DatabaseSQL) *databaseHandlerService {
+func NewDatabaseHandlerService(database *storage.DatabaseSQL) *databaseHandlerService {
 	return &databaseHandlerService{
 		Database: database,
 	}
 }
 
-func RegisterDatabaseHandlers(r chi.Router, database *database.DatabaseSQL) {
+func RegisterDatabaseHandlers(r chi.Router, database *storage.DatabaseSQL) {
 	metricsHandlerService := NewDatabaseHandlerService(database)
 
 	r.Get("/ping", metricsHandlerService.PingHandler())
