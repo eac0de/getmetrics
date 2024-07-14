@@ -16,7 +16,7 @@ type HTTPServerConfig struct {
 	StoreInterval   time.Duration `yaml:"store_interval"`
 	FileStoragePath string        `env:"FILE_STORAGE_PATH" yaml:"file_storage_path"`
 	Restore         bool          `env:"RESTORE" yaml:"restore"`
-	DatabaseDsn     string        `env:"DATABASE_DSN" yaml:"database_dsn"`
+	DatabaseDSN     string        `env:"DATABASE_DSN" yaml:"database_dsn"`
 }
 
 type EnvHTTPServerConfig struct {
@@ -50,7 +50,7 @@ func (c *HTTPServerConfig) ReadServerFlags() {
 	flag.IntVar(&storeInterval, "i", storeInterval, "server store interval")
 	flag.StringVar(&c.FileStoragePath, "f", c.FileStoragePath, "server file restore path")
 	flag.BoolVar(&c.Restore, "r", c.Restore, "server restore")
-	flag.StringVar(&c.DatabaseDsn, "d", c.DatabaseDsn, "db address")
+	flag.StringVar(&c.DatabaseDSN, "d", c.DatabaseDSN, "db address")
 	flag.Parse()
 	c.StoreInterval = time.Duration(storeInterval) * time.Second
 

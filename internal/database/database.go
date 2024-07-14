@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -12,8 +13,9 @@ type DatabaseSQL struct {
 	sqlDB *sql.DB
 }
 
-func NewDatabaseSQL(database_dns string) *DatabaseSQL {
-	sqlDB, err := sql.Open("pgx", database_dns)
+func NewDatabaseSQL(databaseDSN string) *DatabaseSQL {
+	fmt.Println(databaseDSN)
+	sqlDB, err := sql.Open("pgx", databaseDSN)
 	if err != nil {
 		panic(err)
 	}

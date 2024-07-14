@@ -41,7 +41,7 @@ func (s *metricsService) Stop(cancel context.CancelFunc) {
 
 func (s *metricsService) Run(ctx context.Context) {
 	logger.InitLogger(s.conf.LogLevel)
-	db := database.NewDatabaseSQL(s.conf.DatabaseDsn)
+	db := database.NewDatabaseSQL(s.conf.DatabaseDSN)
 	defer db.Close()
 	go s.storage.StartSavingMetricsToFile(ctx, s.conf.FileStoragePath, s.conf.StoreInterval)
 
