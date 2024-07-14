@@ -13,6 +13,7 @@ type DatabaseSQL struct {
 }
 
 func NewDatabaseSQL(databaseDSN string) *DatabaseSQL {
+	println(databaseDSN)
 	sqlDB, err := sql.Open("pgx", databaseDSN)
 	if err != nil {
 		panic(err)
