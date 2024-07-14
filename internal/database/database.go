@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -14,7 +13,6 @@ type DatabaseSQL struct {
 }
 
 func NewDatabaseSQL(databaseDSN string) *DatabaseSQL {
-	fmt.Println(databaseDSN)
 	sqlDB, err := sql.Open("pgx", databaseDSN)
 	if err != nil {
 		panic(err)
@@ -25,7 +23,7 @@ func NewDatabaseSQL(databaseDSN string) *DatabaseSQL {
 }
 
 func (db *DatabaseSQL) Ping() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return db.sqlDB.PingContext(ctx)
 }
