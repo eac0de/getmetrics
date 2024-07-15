@@ -95,7 +95,18 @@ func (db *DatabaseSQL) Save(metricType string, metricName string, metricValue in
 		return nil, fmt.Errorf("invalid metric type")
 	}
 	metric.ID = metricName
-	// Здесь должно быть сохранение метрики
+	var deltaValue, valueValue interface{}
+	if metric.Delta != nil {
+		deltaValue = *metric.Delta
+	}
+	if metric.Value != nil {
+		valueValue = *metric.Value
+	}
+	db.sqlDB.ExecContext(
+		context.TODO(),
+		"INSERT INTO metrics (id, m_type, delta, value) VALUES($1,$2,$3,$4)",
+		metric.ID, metric.MType, deltaValue, valueValue,
+	)
 	return &metric, nil
 }
 
@@ -104,7 +115,9 @@ func (db *DatabaseSQL) Get(metricType string, metricName string) (*models.Metric
 	defer db.mu.Unlock()
 	var metric models.Metrics
 	row := db.sqlDB.QueryRowContext(
-		context.TODO(), "SELECT id, m_type, delta, value FROM metrics WHERE m_type = $1 AND id = $2", metricType, metricName,
+		context.TODO(),
+		"SELECT id, m_type, delta, value FROM metrics WHERE m_type = $1 AND id = $2",
+		metricType, metricName,
 	)
 	var delta int64
 	var value float64
@@ -120,7 +133,8 @@ func (db *DatabaseSQL) Get(metricType string, metricName string) (*models.Metric
 func (db *DatabaseSQL) GetAll() ([]*models.Metrics, error) {
 	var metrics []*models.Metrics
 	rows, err := db.sqlDB.QueryContext(
-		context.TODO(), "SELECT id, m_type, delta, value FROM metrics",
+		context.TODO(),
+		"SELECT id, m_type, delta, value FROM metrics",
 	)
 	if err != nil {
 		return nil, err
