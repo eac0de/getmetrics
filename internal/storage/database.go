@@ -4,12 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/eac0de/getmetrics/internal/models"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
 )
 
 type DatabaseSQL struct {
@@ -18,7 +20,6 @@ type DatabaseSQL struct {
 }
 
 func NewDatabaseSQL(databaseDSN string) (*DatabaseSQL, error) {
-	println(databaseDSN)
 	sqlDB, err := sql.Open("pgx", databaseDSN)
 	if err != nil {
 		return nil, err
@@ -145,6 +146,11 @@ func (db *DatabaseSQL) GetAll() ([]*models.Metrics, error) {
 }
 
 func (db *DatabaseSQL) Migrate() error {
-	// TODO
+	migrationsDir := "./migrations"
+	// Применение миграций
+	if err := goose.Up(db.sqlDB, migrationsDir); err != nil {
+		return err
+	}
+	log.Println("Migrations applied successfully!")
 	return nil
 }
