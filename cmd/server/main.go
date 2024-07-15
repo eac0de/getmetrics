@@ -8,7 +8,6 @@ import (
 
 	"github.com/eac0de/getmetrics/internal/config"
 	"github.com/eac0de/getmetrics/internal/server"
-	"github.com/eac0de/getmetrics/internal/storage"
 )
 
 func main() {
