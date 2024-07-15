@@ -17,16 +17,16 @@ import (
 )
 
 type metricsHandlerService struct {
-	metricsStore MetricsStorer
+	metricsStore storage.MetricsStorer
 }
 
-func NewMetricsHandlerService(m MetricsStorer) *metricsHandlerService {
+func NewMetricsHandlerService(m storage.MetricsStorer) *metricsHandlerService {
 	return &metricsHandlerService{
 		metricsStore: m,
 	}
 }
 
-func RegisterMetricsHandlers(r chi.Router, storage MetricsStorer) {
+func RegisterMetricsHandlers(r chi.Router, storage storage.MetricsStorer) {
 	metricsHandlerService := NewMetricsHandlerService(storage)
 	r.Get("/", metricsHandlerService.ShowMetricsSummaryHandler())
 
@@ -47,7 +47,7 @@ func (mhs *metricsHandlerService) UpdateMetricHandler() func(http.ResponseWriter
 			http.Error(w, "metric name is required", http.StatusNotFound)
 			return
 		}
-		metric, err := mhs.metricsStore.Save(metricType, metricName, metricValue)
+		metric, err := mhs.metricsStore.Save(r.Context(), &models.UnknownMetrics{MType: metricType, ID: metricName, DeltaValue: metricValue})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -105,7 +105,57 @@ func (mhs *metricsHandlerService) UpdateMetricJSONHandler() func(http.ResponseWr
 			http.Error(w, "invalid metric type", http.StatusBadRequest)
 			return
 		}
-		metric, err := mhs.metricsStore.Save(metricType, metricName, metricValue)
+		metric, err := mhs.metricsStore.Save(r.Context(), &models.UnknownMetrics{MType: metricType, ID: metricName, DeltaValue: metricValue})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		metricJSON, _ := json.Marshal(metric)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(metricJSON)
+	}
+}
+
+func (mhs *metricsHandlerService) UpdateManyMetricJSONHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var newMetricList []models.Metrics
+		var buf bytes.Buffer
+		_, err := buf.ReadFrom(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err = json.Unmarshal(buf.Bytes(), &newMetricList); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		metricType := newMetric.MType
+		metricName := newMetric.ID
+
+		if metricName == "" {
+			http.Error(w, "metric name is required", http.StatusNotFound)
+			return
+		}
+		var metricValue interface{}
+		switch metricType {
+		case storage.Counter:
+			if newMetric.Delta == nil {
+				http.Error(w, "for metric type counter field delta is required", http.StatusBadRequest)
+				return
+			}
+			metricValue = *newMetric.Delta
+		case storage.Gauge:
+			if newMetric.Value == nil {
+				http.Error(w, "for metric type gauge field value is required", http.StatusBadRequest)
+				return
+			}
+			metricValue = *newMetric.Value
+		default:
+			http.Error(w, "invalid metric type", http.StatusBadRequest)
+			return
+		}
+		metric, err := mhs.metricsStore.Save(r.Context(), &models.UnknownMetrics{MType: metricType, ID: metricName, DeltaValue: metricValue})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -126,7 +176,7 @@ func (mhs *metricsHandlerService) GetMetricHandler() func(http.ResponseWriter, *
 			http.Error(w, "metric name is required", http.StatusNotFound)
 			return
 		}
-		metric, _ := mhs.metricsStore.Get(metricType, metricName)
+		metric, _ := mhs.metricsStore.Get(r.Context(), metricType, metricName)
 		errorMessage := fmt.Sprintf("metric %s not found", metricName)
 		if metric == nil {
 			http.Error(w, errorMessage, http.StatusNotFound)
@@ -166,7 +216,7 @@ func (mhs *metricsHandlerService) GetMetricJSONHandler() func(http.ResponseWrite
 			http.Error(w, "metric name is required", http.StatusNotFound)
 			return
 		}
-		metric, _ := mhs.metricsStore.Get(metricType, metricName)
+		metric, _ := mhs.metricsStore.Get(r.Context(), metricType, metricName)
 		if metric == nil {
 			errorMessage := fmt.Sprintf("metric %s not found", metricName)
 			http.Error(w, errorMessage, http.StatusNotFound)
@@ -192,7 +242,7 @@ func (mhs *metricsHandlerService) ShowMetricsSummaryHandler() func(http.Response
 	metricsTemplate := string(temp)
 	tmpl := template.Must(template.New("metrics").Parse(metricsTemplate))
 	return func(w http.ResponseWriter, r *http.Request) {
-		metrics, err := mhs.metricsStore.GetAll()
+		metrics, err := mhs.metricsStore.GetAll(r.Context())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

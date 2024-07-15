@@ -15,7 +15,7 @@ import (
 
 type metricsService struct {
 	conf    *config.HTTPServerConfig
-	storage MetricsStorer
+	storage storage.MetricsStorer
 }
 
 func NewMetricsService(
@@ -40,7 +40,7 @@ func (s *metricsService) Run(ctx context.Context) {
 	contentTypesForCompress := "application/json text/html"
 	r.Use(middlewares.GetGzipMiddleware(contentTypesForCompress))
 
-	db, err := storage.NewDatabaseSQL(s.conf.DatabaseDSN)
+	db, err := storage.NewDatabaseSQL(ctx, s.conf.DatabaseDSN)
 	if err != nil {
 		store := storage.NewMetricsStorage(s.conf.FileStoragePath)
 		go store.StartSavingMetricsToFile(ctx, s.conf.FileStoragePath, s.conf.StoreInterval)

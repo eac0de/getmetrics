@@ -39,16 +39,16 @@ func NewMetricsStorage(filename string) *MetricsStorage {
 	return &ms
 }
 
-func (m *MetricsStorage) Save(metricType string, metricName string, metricValue interface{}) (*models.Metrics, error) {
+func (m *MetricsStorage) Save(ctx context.Context, um *models.UnknownMetrics) (*models.Metrics, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var err error
 	var metric models.Metrics
-	switch metricType {
+	switch um.MType {
 	case Gauge:
-		metricValueFloat, ok := metricValue.(float64)
+		metricValueFloat, ok := um.DeltaValue.(float64)
 		if !ok {
-			valueStr, ok := metricValue.(string)
+			valueStr, ok := um.DeltaValue.(string)
 			if !ok {
 				return nil, fmt.Errorf("invalid value type for guage metric(1)")
 			}
@@ -57,13 +57,13 @@ func (m *MetricsStorage) Save(metricType string, metricName string, metricValue 
 				return nil, fmt.Errorf("invalid value type for guage metric(2)")
 			}
 		}
-		m.SystemMetrics.Gauge[metricName] = metricValueFloat
+		m.SystemMetrics.Gauge[um.ID] = metricValueFloat
 		metric.Value = &metricValueFloat
 		metric.MType = Gauge
 	case Counter:
-		metricValueInt, ok := metricValue.(int64)
+		metricValueInt, ok := um.DeltaValue.(int64)
 		if !ok {
-			valueStr, ok := metricValue.(string)
+			valueStr, ok := um.DeltaValue.(string)
 			if !ok {
 				return nil, fmt.Errorf("invalid value type for counter metric(1)")
 			}
@@ -72,21 +72,72 @@ func (m *MetricsStorage) Save(metricType string, metricName string, metricValue 
 				return nil, fmt.Errorf("invalid value type for counter metric(2)")
 			}
 		}
-		if oldValue, ok := m.SystemMetrics.Counter[metricName]; ok {
+		if oldValue, ok := m.SystemMetrics.Counter[um.ID]; ok {
 			metricValueInt = metricValueInt + oldValue
 		}
-		m.SystemMetrics.Counter[metricName] = metricValueInt
+		m.SystemMetrics.Counter[um.ID] = metricValueInt
 		metric.Delta = &metricValueInt
 		metric.MType = Counter
 	default:
 		// Обработка некорректного типа метрики
 		return nil, fmt.Errorf("invalid metric type")
 	}
-	metric.ID = metricName
+	metric.ID = um.ID
 	return &metric, nil
 }
 
-func (m *MetricsStorage) Get(metricType string, metricName string) (*models.Metrics, error) {
+func (m *MetricsStorage) SaveMany(ctx context.Context, umList []*models.UnknownMetrics) ([]*models.Metrics, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	metricsList := []*models.Metrics{}
+	for _, um := range umList {
+		var err error
+		var metric models.Metrics
+		switch um.MType {
+		case Gauge:
+			metricValueFloat, ok := um.DeltaValue.(float64)
+			if !ok {
+				valueStr, ok := um.DeltaValue.(string)
+				if !ok {
+					return nil, fmt.Errorf("invalid value type for guage metric(1)")
+				}
+				metricValueFloat, err = strconv.ParseFloat(valueStr, 64)
+				if err != nil {
+					return nil, fmt.Errorf("invalid value type for guage metric(2)")
+				}
+			}
+			m.SystemMetrics.Gauge[um.ID] = metricValueFloat
+			metric.Value = &metricValueFloat
+			metric.MType = Gauge
+		case Counter:
+			metricValueInt, ok := um.DeltaValue.(int64)
+			if !ok {
+				valueStr, ok := um.DeltaValue.(string)
+				if !ok {
+					return nil, fmt.Errorf("invalid value type for counter metric(1)")
+				}
+				metricValueInt, err = strconv.ParseInt(valueStr, 10, 64)
+				if err != nil {
+					return nil, fmt.Errorf("invalid value type for counter metric(2)")
+				}
+			}
+			if oldValue, ok := m.SystemMetrics.Counter[um.ID]; ok {
+				metricValueInt = metricValueInt + oldValue
+			}
+			m.SystemMetrics.Counter[um.ID] = metricValueInt
+			metric.Delta = &metricValueInt
+			metric.MType = Counter
+		default:
+			// Обработка некорректного типа метрики
+			return nil, fmt.Errorf("invalid metric type")
+		}
+		metric.ID = um.ID
+		metricsList = append(metricsList, &metric)
+	}
+	return metricsList, nil
+}
+
+func (m *MetricsStorage) Get(ctx context.Context, metricType string, metricName string) (*models.Metrics, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var metric models.Metrics
@@ -113,7 +164,7 @@ func (m *MetricsStorage) Get(metricType string, metricName string) (*models.Metr
 	return &metric, nil
 }
 
-func (m *MetricsStorage) GetAll() ([]*models.Metrics, error) {
+func (m *MetricsStorage) GetAll(ctx context.Context) ([]*models.Metrics, error) {
 	var metrics []*models.Metrics
 	for name, value := range m.SystemMetrics.Gauge {
 		valueCopy := value

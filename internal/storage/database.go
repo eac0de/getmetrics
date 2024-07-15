@@ -19,7 +19,7 @@ type DatabaseSQL struct {
 	mu    sync.Mutex
 }
 
-func NewDatabaseSQL(databaseDSN string) (*DatabaseSQL, error) {
+func NewDatabaseSQL(ctx context.Context, databaseDSN string) (*DatabaseSQL, error) {
 	sqlDB, err := sql.Open("pgx", databaseDSN)
 	if err != nil {
 		return nil, err
@@ -31,7 +31,7 @@ func NewDatabaseSQL(databaseDSN string) (*DatabaseSQL, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = db.Migrate()
+	err = db.Migrate(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -48,16 +48,16 @@ func (db *DatabaseSQL) Close() error {
 	return db.sqlDB.Close()
 }
 
-func (db *DatabaseSQL) Save(metricType string, metricName string, metricValue interface{}) (*models.Metrics, error) {
+func (db *DatabaseSQL) Save(ctx context.Context, um *models.UnknownMetrics) (*models.Metrics, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	var err error
 	var metric models.Metrics
-	switch metricType {
+	switch um.MType {
 	case Gauge:
-		metricValueFloat, ok := metricValue.(float64)
+		metricValueFloat, ok := um.DeltaValue.(float64)
 		if !ok {
-			valueStr, ok := metricValue.(string)
+			valueStr, ok := um.DeltaValue.(string)
 			if !ok {
 				return nil, fmt.Errorf("invalid value type for guage metric(1)")
 			}
@@ -69,9 +69,9 @@ func (db *DatabaseSQL) Save(metricType string, metricName string, metricValue in
 		metric.Value = &metricValueFloat
 		metric.MType = Gauge
 	case Counter:
-		metricValueInt, ok := metricValue.(int64)
+		metricValueInt, ok := um.DeltaValue.(int64)
 		if !ok {
-			valueStr, ok := metricValue.(string)
+			valueStr, ok := um.DeltaValue.(string)
 			if !ok {
 				return nil, fmt.Errorf("invalid value type for counter metric(1)")
 			}
@@ -81,7 +81,7 @@ func (db *DatabaseSQL) Save(metricType string, metricName string, metricValue in
 			}
 		}
 		row := db.sqlDB.QueryRowContext(
-			context.TODO(), "SELECT delta FROM metrics WHERE m_type = $1 AND id = $2", metricType, metricName,
+			ctx, "SELECT delta FROM metrics WHERE m_type = $1 AND id = $2", um.MType, um.ID,
 		)
 		var oldValue sql.NullInt64
 		row.Scan(oldValue)
@@ -94,7 +94,7 @@ func (db *DatabaseSQL) Save(metricType string, metricName string, metricValue in
 		// Обработка некорректного типа метрики
 		return nil, fmt.Errorf("invalid metric type")
 	}
-	metric.ID = metricName
+	metric.ID = um.ID
 	var deltaValue, valueValue interface{}
 	if metric.Delta != nil {
 		deltaValue = *metric.Delta
@@ -103,19 +103,96 @@ func (db *DatabaseSQL) Save(metricType string, metricName string, metricValue in
 		valueValue = *metric.Value
 	}
 	db.sqlDB.ExecContext(
-		context.TODO(),
+		ctx,
 		"INSERT INTO metrics (id, m_type, delta, value) VALUES($1,$2,$3,$4)",
 		metric.ID, metric.MType, deltaValue, valueValue,
 	)
 	return &metric, nil
 }
 
-func (db *DatabaseSQL) Get(metricType string, metricName string) (*models.Metrics, error) {
+func (db *DatabaseSQL) SaveMany(ctx context.Context, umList []*models.UnknownMetrics) ([]*models.Metrics, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	metricsList := []*models.Metrics{}
+	tx, err := db.sqlDB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	for _, um := range umList {
+		var err error
+		var metric models.Metrics
+		switch um.MType {
+		case Gauge:
+			metricValueFloat, ok := um.DeltaValue.(float64)
+			if !ok {
+				valueStr, ok := um.DeltaValue.(string)
+				if !ok {
+					return nil, fmt.Errorf("invalid value type for guage metric(1)")
+				}
+				metricValueFloat, err = strconv.ParseFloat(valueStr, 64)
+				if err != nil {
+					return nil, fmt.Errorf("invalid value type for guage metric(2)")
+				}
+			}
+			metric.Value = &metricValueFloat
+			metric.MType = Gauge
+		case Counter:
+			metricValueInt, ok := um.DeltaValue.(int64)
+			if !ok {
+				valueStr, ok := um.DeltaValue.(string)
+				if !ok {
+					return nil, fmt.Errorf("invalid value type for counter metric(1)")
+				}
+				metricValueInt, err = strconv.ParseInt(valueStr, 10, 64)
+				if err != nil {
+					return nil, fmt.Errorf("invalid value type for counter metric(2)")
+				}
+			}
+			row := db.sqlDB.QueryRowContext(
+				ctx,
+				"SELECT delta FROM metrics WHERE m_type = $1 AND id = $2",
+				um.MType, um.ID,
+			)
+			var oldValue sql.NullInt64
+			row.Scan(oldValue)
+			if oldValue.Valid {
+				metricValueInt += oldValue.Int64
+			}
+			metric.Delta = &metricValueInt
+			metric.MType = Counter
+		default:
+			// Обработка некорректного типа метрики
+			return nil, fmt.Errorf("invalid metric type")
+		}
+		metric.ID = um.ID
+		var deltaValue, valueValue interface{}
+		if metric.Delta != nil {
+			deltaValue = *metric.Delta
+		}
+		if metric.Value != nil {
+			valueValue = *metric.Value
+		}
+		_, err = tx.ExecContext(
+			ctx,
+			"INSERT INTO metrics (id, m_type, delta, value) VALUES($1,$2,$3,$4)",
+			metric.ID, metric.MType, deltaValue, valueValue,
+		)
+		if err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+		metricsList = append(metricsList, &metric)
+	}
+	tx.Commit()
+	return metricsList, nil
+}
+
+func (db *DatabaseSQL) Get(ctx context.Context, metricType string, metricName string) (*models.Metrics, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	var metric models.Metrics
 	row := db.sqlDB.QueryRowContext(
-		context.TODO(),
+		ctx,
 		"SELECT id, m_type, delta, value FROM metrics WHERE m_type = $1 AND id = $2",
 		metricType, metricName,
 	)
@@ -130,10 +207,10 @@ func (db *DatabaseSQL) Get(metricType string, metricName string) (*models.Metric
 	return &metric, nil
 }
 
-func (db *DatabaseSQL) GetAll() ([]*models.Metrics, error) {
+func (db *DatabaseSQL) GetAll(ctx context.Context) ([]*models.Metrics, error) {
 	var metrics []*models.Metrics
 	rows, err := db.sqlDB.QueryContext(
-		context.TODO(),
+		ctx,
 		"SELECT id, m_type, delta, value FROM metrics",
 	)
 	if err != nil {
@@ -159,10 +236,10 @@ func (db *DatabaseSQL) GetAll() ([]*models.Metrics, error) {
 	return metrics, nil
 }
 
-func (db *DatabaseSQL) Migrate() error {
+func (db *DatabaseSQL) Migrate(ctx context.Context) error {
 	migrationsDir := "./migrations"
 	// Применение миграций
-	if err := goose.Up(db.sqlDB, migrationsDir); err != nil {
+	if err := goose.UpContext(ctx, db.sqlDB, migrationsDir); err != nil {
 		return err
 	}
 	log.Println("Migrations applied successfully!")
