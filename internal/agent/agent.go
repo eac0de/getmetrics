@@ -142,48 +142,48 @@ func (a *Agent) collectMetrics() *Metrics {
 	}
 }
 
-func (a *Agent) sendMetric(metric *models.Metrics) error {
-	metricJSON, err := json.Marshal(metric)
-	if err != nil {
-		return err
-	}
-	metricGzip, err := compressor.GzipData(metricJSON)
-	if err != nil {
-		return err
-	}
-	url := fmt.Sprintf("%s/update/", a.conf.ServerURL)
-	resp, err := a.client.
-		R().
-		SetHeader("Content-Type", "application/json").
-		SetHeader("Content-Encoding", "gzip").
-		SetBody(metricGzip).
-		Post(url)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode() != http.StatusOK {
-		return fmt.Errorf("%s", resp.Body())
-	}
-	return nil
-}
+// func (a *Agent) sendMetric(metric *models.Metrics) error {
+// 	metricJSON, err := json.Marshal(metric)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	metricGzip, err := compressor.GzipData(metricJSON)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	url := fmt.Sprintf("%s/update/", a.conf.ServerURL)
+// 	resp, err := a.client.
+// 		R().
+// 		SetHeader("Content-Type", "application/json").
+// 		SetHeader("Content-Encoding", "gzip").
+// 		SetBody(metricGzip).
+// 		Post(url)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	if resp.StatusCode() != http.StatusOK {
+// 		return fmt.Errorf("%s", resp.Body())
+// 	}
+// 	return nil
+// }
 
-func (a *Agent) sendCounterMetric(metricName string, delta int64) error {
-	metric := models.Metrics{
-		ID:    metricName,
-		MType: storage.Counter,
-		Delta: &delta,
-	}
-	return a.sendMetric(&metric)
-}
+// func (a *Agent) sendCounterMetric(metricName string, delta int64) error {
+// 	metric := models.Metrics{
+// 		ID:    metricName,
+// 		MType: storage.Counter,
+// 		Delta: &delta,
+// 	}
+// 	return a.sendMetric(&metric)
+// }
 
-func (a *Agent) sendGaugeMetric(metricName string, value float64) error {
-	metric := models.Metrics{
-		ID:    metricName,
-		MType: storage.Gauge,
-		Value: &value,
-	}
-	return a.sendMetric(&metric)
-}
+// func (a *Agent) sendGaugeMetric(metricName string, value float64) error {
+// 	metric := models.Metrics{
+// 		ID:    metricName,
+// 		MType: storage.Gauge,
+// 		Value: &value,
+// 	}
+// 	return a.sendMetric(&metric)
+// }
 
 func (a *Agent) sendMetrics(metrics *Metrics) {
 	values := models.SystemMetrics{
@@ -221,14 +221,36 @@ func (a *Agent) sendMetrics(metrics *Metrics) {
 			"PollCount": metrics.PollCount,
 		},
 	}
+	metricsList := []models.Metrics{}
 	for metricName, metricValue := range values.Gauge {
-		if err := a.sendGaugeMetric(metricName, metricValue); err != nil {
-			fmt.Printf("failed to send metric %s: %s\n", metricName, err.Error())
-		}
+		metricsList = append(metricsList, models.Metrics{ID: metricName, MType: storage.Gauge, Value: &metricValue})
 	}
 	for metricName, metricDelta := range values.Counter {
-		if err := a.sendCounterMetric(metricName, metricDelta); err != nil {
-			fmt.Printf("failed to send metric %s: %s\n", metricName, err.Error())
-		}
+		metricsList = append(metricsList, models.Metrics{ID: metricName, MType: storage.Counter, Delta: &metricDelta})
+	}
+	metricsListJSON, err := json.Marshal(metricsList)
+	if err != nil {
+		fmt.Printf("send metrics error: %s", err.Error())
+		return
+	}
+	metricGzip, err := compressor.GzipData(metricsListJSON)
+	if err != nil {
+		fmt.Printf("send metrics error: %s", err.Error())
+		return
+	}
+	url := fmt.Sprintf("%s/updates/", a.conf.ServerURL)
+	resp, err := a.client.
+		R().
+		SetHeader("Content-Type", "application/json").
+		SetHeader("Content-Encoding", "gzip").
+		SetBody(metricGzip).
+		Post(url)
+	if err != nil {
+		fmt.Printf("send metrics error: %s", err.Error())
+		return
+	}
+	if resp.StatusCode() != http.StatusOK {
+		fmt.Printf("send metrics error: %s", resp.Body())
+		return
 	}
 }
