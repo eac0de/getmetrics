@@ -208,13 +208,13 @@ func (db *DatabaseSQL) SaveMany(ctx context.Context, umList []*models.UnknownMet
 	return metricsList, nil
 }
 
-type ExecSqlModel interface {
+type ExecSQLModel interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
 func (db *DatabaseSQL) insertOrUpdateMetrics(
 	ctx context.Context,
-	sqlModel ExecSqlModel,
+	sqlModel ExecSQLModel,
 	ID string,
 	MType string,
 	Delta interface{},
@@ -236,12 +236,18 @@ func (db *DatabaseSQL) insertOrUpdateMetrics(
 			"UPDATE metrics SET delta=$1, value=$2 WHERE m_type=$3 AND id=$4",
 			Delta, Value, MType, ID,
 		)
+		if err != nil {
+			return err
+		}
 	} else {
 		_, err = sqlModel.ExecContext(
 			ctx,
 			"INSERT INTO metrics (id, m_type, delta, value) VALUES($1,$2,$3,$4)",
 			ID, MType, Delta, Value,
 		)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
