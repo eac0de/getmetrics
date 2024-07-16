@@ -3,7 +3,7 @@
 CREATE TABLE metrics (
     id TEXT,
     m_type TEXT NOT NULL,
-    delta INT,
+    delta BIGINT,
     value DOUBLE PRECISION
 );
 -- +goose StatementEnd

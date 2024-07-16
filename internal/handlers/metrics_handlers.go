@@ -126,7 +126,6 @@ func (mhs *metricsHandlerService) UpdateManyMetricJSONHandler() func(http.Respon
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		fmt.Println(buf.String())
 		if err = json.Unmarshal(buf.Bytes(), &newMetricList); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -162,6 +161,7 @@ func (mhs *metricsHandlerService) UpdateManyMetricJSONHandler() func(http.Respon
 		}
 		metrics, err := mhs.metricsStore.SaveMany(r.Context(), umList)
 		if err != nil {
+			fmt.Println(err.Error())
 			http.Error(w, "metrcis saving error", http.StatusBadRequest)
 			return
 		}
