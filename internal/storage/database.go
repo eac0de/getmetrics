@@ -84,7 +84,7 @@ func (db *DatabaseSQL) Save(ctx context.Context, um *models.UnknownMetrics) (*mo
 			ctx, "SELECT delta FROM metrics WHERE m_type = $1 AND id = $2", um.MType, um.ID,
 		)
 		var oldValue sql.NullInt64
-		row.Scan(oldValue)
+		row.Scan(&oldValue)
 		if oldValue.Valid {
 			metricValueInt += oldValue.Int64
 		}
@@ -103,15 +103,20 @@ func (db *DatabaseSQL) Save(ctx context.Context, um *models.UnknownMetrics) (*mo
 		valueValue = *metric.Value
 	}
 	row := db.sqlDB.QueryRowContext(
-		ctx, "SELECT COUNT(*) FROM metrics WHERE m_type = $1 AND id = $2", metric.MType, metric.ID,
+		ctx,
+		"SELECT COUNT(*) FROM metrics WHERE m_type = $1 AND id = $2",
+		metric.MType, metric.ID,
 	)
 	var exist int64
-	row.Scan(exist)
+	err = row.Scan(&exist)
+	if err != nil {
+		return nil, fmt.Errorf("metric scan error")
+	}
 	if exist > 0 {
 		_, err = db.sqlDB.ExecContext(
 			ctx,
-			"UPDATE metrics SET delta=$3, value=$4 WHERE m_type = $2 AND id = $1",
-			metric.ID, metric.MType, deltaValue, valueValue,
+			"UPDATE metrics SET delta=$1, value=$2 WHERE m_type =$3  AND id =$4",
+			deltaValue, valueValue, metric.MType, metric.ID,
 		)
 	} else {
 		_, err = db.sqlDB.ExecContext(
@@ -170,7 +175,7 @@ func (db *DatabaseSQL) SaveMany(ctx context.Context, umList []*models.UnknownMet
 				um.MType, um.ID,
 			)
 			var oldValue sql.NullInt64
-			row.Scan(oldValue)
+			row.Scan(&oldValue)
 			if oldValue.Valid {
 				metricValueInt += oldValue.Int64
 			}
@@ -189,24 +194,29 @@ func (db *DatabaseSQL) SaveMany(ctx context.Context, umList []*models.UnknownMet
 			valueValue = *metric.Value
 		}
 		row := db.sqlDB.QueryRowContext(
-			ctx, "SELECT COUNT(*) FROM metrics WHERE m_type = $1 AND id = $2", metric.MType, metric.ID,
+			ctx, "SELECT COUNT(*) FROM metrics WHERE m_type=$1 AND id=$2", metric.MType, metric.ID,
 		)
 		var exist int64
-		row.Scan(exist)
+		err = row.Scan(&exist)
+		if err != nil {
+			tx.Rollback()
+			return nil, err
+		}
 		if exist > 0 {
 			_, err = tx.ExecContext(
 				ctx,
-				"UPDATE metrics SET delta=$3, value=$4 WHERE m_type = $2 AND id = $1",
-				metric.ID, metric.MType, deltaValue, valueValue,
+				"UPDATE metrics SET delta=$1, value=$2 WHERE m_type=$3 AND id=$4",
+				deltaValue, valueValue, metric.MType, metric.ID,
 			)
 		} else {
 			_, err = tx.ExecContext(
 				ctx,
-				"INSERT metrics (id, m_type, delta, value) VALUES($1,$2,$3,$4)",
+				"INSERT INTO metrics (id, m_type, delta, value) VALUES($1,$2,$3,$4)",
 				metric.ID, metric.MType, deltaValue, valueValue,
 			)
 		}
 		if err != nil {
+			println(err.Error())
 			tx.Rollback()
 			return nil, err
 		}
@@ -220,19 +230,24 @@ func (db *DatabaseSQL) Get(ctx context.Context, metricType string, metricName st
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	var metric models.Metrics
+	println(metricType, metricName)
 	row := db.sqlDB.QueryRowContext(
 		ctx,
-		"SELECT id, m_type, delta, value FROM metrics WHERE m_type = $1 AND id = $2",
+		"SELECT id, m_type, delta, value FROM metrics WHERE m_type=$1 AND id=$2",
 		metricType, metricName,
 	)
-	var delta int64
-	var value float64
+	var delta sql.NullInt64
+	var value sql.NullFloat64
 	err := row.Scan(&metric.ID, &metric.MType, &delta, &value)
 	if err != nil {
 		return nil, err
 	}
-	metric.Delta = &delta
-	metric.Value = &value
+	if delta.Valid {
+		metric.Delta = &delta.Int64
+	}
+	if value.Valid {
+		metric.Value = &value.Float64
+	}
 	return &metric, nil
 }
 
@@ -248,11 +263,17 @@ func (db *DatabaseSQL) GetAll(ctx context.Context) ([]*models.Metrics, error) {
 	defer rows.Close()
 	for rows.Next() {
 		var m models.Metrics
-		var delta int64
-		var value float64
+		var delta sql.NullInt64
+		var value sql.NullFloat64
 		err = rows.Scan(&m.ID, &m.MType, &delta, &value)
 		if err != nil {
 			return nil, err
+		}
+		if delta.Valid {
+			m.Delta = &delta.Int64
+		}
+		if value.Valid {
+			m.Value = &value.Float64
 		}
 		metrics = append(metrics, &m)
 	}

@@ -32,7 +32,7 @@ func RegisterMetricsHandlers(r chi.Router, storage storage.MetricsStorer) {
 
 	r.Post("/update/{metricType}/{metricName}/{metricValue}", metricsHandlerService.UpdateMetricHandler())
 	r.Post("/update/", metricsHandlerService.UpdateMetricJSONHandler())
-
+	r.Post("/updates/", metricsHandlerService.UpdateManyMetricJSONHandler())
 	r.Get("/value/{metricType}/{metricName}", metricsHandlerService.GetMetricHandler())
 	r.Post("/value/", metricsHandlerService.GetMetricJSONHandler())
 }
