@@ -121,7 +121,7 @@ func (db *DatabaseSQL) Save(ctx context.Context, um *models.UnknownMetrics) (*mo
 	} else {
 		_, err = db.sqlDB.ExecContext(
 			ctx,
-			"INSERT metrics (id, m_type, delta, value) VALUES($1,$2,$3,$4)",
+			"INSERT INTO metrics (id, m_type, delta, value) VALUES($1,$2,$3,$4)",
 			metric.ID, metric.MType, deltaValue, valueValue,
 		)
 	}
