@@ -102,11 +102,27 @@ func (db *DatabaseSQL) Save(ctx context.Context, um *models.UnknownMetrics) (*mo
 	if metric.Value != nil {
 		valueValue = *metric.Value
 	}
-	db.sqlDB.ExecContext(
-		ctx,
-		"INSERT INTO metrics (id, m_type, delta, value) VALUES($1,$2,$3,$4)",
-		metric.ID, metric.MType, deltaValue, valueValue,
+	row := db.sqlDB.QueryRowContext(
+		ctx, "SELECT COUNT(*) FROM metrics WHERE m_type = $1 AND id = $2", metric.MType, metric.ID,
 	)
+	var exist int64
+	row.Scan(exist)
+	if exist > 0 {
+		_, err = db.sqlDB.ExecContext(
+			ctx,
+			"UPDATE metrics SET delta=$3, value=$4 WHERE m_type = $2 AND id = $1",
+			metric.ID, metric.MType, deltaValue, valueValue,
+		)
+	} else {
+		_, err = db.sqlDB.ExecContext(
+			ctx,
+			"INSERT metrics (id, m_type, delta, value) VALUES($1,$2,$3,$4)",
+			metric.ID, metric.MType, deltaValue, valueValue,
+		)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("metric saving error")
+	}
 	return &metric, nil
 }
 
@@ -172,11 +188,24 @@ func (db *DatabaseSQL) SaveMany(ctx context.Context, umList []*models.UnknownMet
 		if metric.Value != nil {
 			valueValue = *metric.Value
 		}
-		_, err = tx.ExecContext(
-			ctx,
-			"INSERT INTO metrics (id, m_type, delta, value) VALUES($1,$2,$3,$4)",
-			metric.ID, metric.MType, deltaValue, valueValue,
+		row := db.sqlDB.QueryRowContext(
+			ctx, "SELECT COUNT(*) FROM metrics WHERE m_type = $1 AND id = $2", metric.MType, metric.ID,
 		)
+		var exist int64
+		row.Scan(exist)
+		if exist > 0 {
+			_, err = tx.ExecContext(
+				ctx,
+				"UPDATE metrics SET delta=$3, value=$4 WHERE m_type = $2 AND id = $1",
+				metric.ID, metric.MType, deltaValue, valueValue,
+			)
+		} else {
+			_, err = tx.ExecContext(
+				ctx,
+				"INSERT metrics (id, m_type, delta, value) VALUES($1,$2,$3,$4)",
+				metric.ID, metric.MType, deltaValue, valueValue,
+			)
+		}
 		if err != nil {
 			tx.Rollback()
 			return nil, err

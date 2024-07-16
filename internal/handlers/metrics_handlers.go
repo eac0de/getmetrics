@@ -130,40 +130,44 @@ func (mhs *metricsHandlerService) UpdateManyMetricJSONHandler() func(http.Respon
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		metricType := newMetric.MType
-		metricName := newMetric.ID
+		var umList []*models.UnknownMetrics
+		for _, metric := range newMetricList {
 
-		if metricName == "" {
-			http.Error(w, "metric name is required", http.StatusNotFound)
-			return
-		}
-		var metricValue interface{}
-		switch metricType {
-		case storage.Counter:
-			if newMetric.Delta == nil {
-				http.Error(w, "for metric type counter field delta is required", http.StatusBadRequest)
+			if metric.ID == "" {
+				http.Error(w, "metric name is required", http.StatusNotFound)
 				return
 			}
-			metricValue = *newMetric.Delta
-		case storage.Gauge:
-			if newMetric.Value == nil {
-				http.Error(w, "for metric type gauge field value is required", http.StatusBadRequest)
+			var um models.UnknownMetrics
+			switch metric.MType {
+			case storage.Counter:
+				if metric.Delta == nil {
+					http.Error(w, "for metric type counter field delta is required", http.StatusBadRequest)
+					return
+				}
+				um.DeltaValue = *metric.Delta
+			case storage.Gauge:
+				if metric.Value == nil {
+					http.Error(w, "for metric type gauge field value is required", http.StatusBadRequest)
+					return
+				}
+				um.DeltaValue = *metric.Value
+			default:
+				http.Error(w, "invalid metric type", http.StatusBadRequest)
 				return
 			}
-			metricValue = *newMetric.Value
-		default:
-			http.Error(w, "invalid metric type", http.StatusBadRequest)
-			return
+			um.ID = metric.ID
+			um.MType = metric.MType
+			umList = append(umList, &um)
 		}
-		metric, err := mhs.metricsStore.Save(r.Context(), &models.UnknownMetrics{MType: metricType, ID: metricName, DeltaValue: metricValue})
+		metrics, err := mhs.metricsStore.SaveMany(r.Context(), umList)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, "metrcis saving error", http.StatusBadRequest)
 			return
 		}
-		metricJSON, _ := json.Marshal(metric)
+		metricsJSON, _ := json.Marshal(metrics)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write(metricJSON)
+		w.Write(metricsJSON)
 	}
 }
 
