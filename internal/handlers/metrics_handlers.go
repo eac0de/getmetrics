@@ -157,7 +157,6 @@ func (mhs *metricsHandlerService) UpdateManyMetricJSONHandler() func(http.Respon
 			}
 			um.ID = metric.ID
 			um.MType = metric.MType
-			fmt.Println(um)
 			umList = append(umList, &um)
 		}
 		metrics, err := mhs.metricsStore.SaveMany(r.Context(), umList)
@@ -228,7 +227,6 @@ func (mhs *metricsHandlerService) GetMetricJSONHandler() func(http.ResponseWrite
 			return
 		}
 		metricJSON, _ := json.Marshal(metric)
-		fmt.Println(string(metricJSON))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write(metricJSON)

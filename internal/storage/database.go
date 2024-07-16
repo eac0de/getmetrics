@@ -134,14 +134,9 @@ func (db *DatabaseSQL) Save(ctx context.Context, um *models.UnknownMetrics) (*mo
 func (db *DatabaseSQL) SaveMany(ctx context.Context, umList []*models.UnknownMetrics) ([]*models.Metrics, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	metricsList := []*models.Metrics{}
-	tx, err := db.sqlDB.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, err
-	}
+	ms := models.SystemMetrics{Gauge: map[string]float64{}, Counter: map[string]int64{}}
 	for _, um := range umList {
 		var err error
-		var metric models.Metrics
 		switch um.MType {
 		case Gauge:
 			metricValueFloat, ok := um.DeltaValue.(float64)
@@ -155,8 +150,7 @@ func (db *DatabaseSQL) SaveMany(ctx context.Context, umList []*models.UnknownMet
 					return nil, fmt.Errorf("invalid value type for guage metric(2)")
 				}
 			}
-			metric.Value = &metricValueFloat
-			metric.MType = Gauge
+			ms.Gauge[um.ID] = metricValueFloat
 		case Counter:
 			metricValueInt, ok := um.DeltaValue.(int64)
 			if !ok {
@@ -169,60 +163,87 @@ func (db *DatabaseSQL) SaveMany(ctx context.Context, umList []*models.UnknownMet
 					return nil, fmt.Errorf("invalid value type for counter metric(2)")
 				}
 			}
-			row := db.sqlDB.QueryRowContext(
-				ctx,
-				"SELECT delta FROM metrics WHERE m_type = $1 AND id = $2",
-				um.MType, um.ID,
-			)
-			var oldValue sql.NullInt64
-			row.Scan(&oldValue)
-			if oldValue.Valid {
-				metricValueInt += oldValue.Int64
+			oldValue, ok := ms.Counter[um.ID]
+			if !ok {
+				oldValue = 0
 			}
-			metric.Delta = &metricValueInt
-			metric.MType = Counter
+			ms.Counter[um.ID] = metricValueInt + oldValue
 		default:
 			// Обработка некорректного типа метрики
 			return nil, fmt.Errorf("invalid metric type")
 		}
-		metric.ID = um.ID
-		var deltaValue, valueValue interface{}
-		if metric.Delta != nil {
-			deltaValue = *metric.Delta
-		}
-		if metric.Value != nil {
-			valueValue = *metric.Value
-		}
+	}
+	tx, err := db.sqlDB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	metricsList := []*models.Metrics{}
+	for metricName, metricValue := range ms.Counter {
 		row := db.sqlDB.QueryRowContext(
-			ctx, "SELECT COUNT(*) FROM metrics WHERE m_type=$1 AND id=$2", metric.MType, metric.ID,
+			ctx,
+			"SELECT delta FROM metrics WHERE m_type = $1 AND id = $2",
+			Counter, metricName,
 		)
-		var exist int64
-		err = row.Scan(&exist)
+		var oldValue sql.NullInt64
+		row.Scan(&oldValue)
+		if oldValue.Valid {
+			metricValue += oldValue.Int64
+		}
+		err = db.insertOrUpdateMetrics(ctx, tx, metricName, Counter, metricValue, nil)
 		if err != nil {
 			tx.Rollback()
 			return nil, err
 		}
-		if exist > 0 {
-			_, err = tx.ExecContext(
-				ctx,
-				"UPDATE metrics SET delta=$1, value=$2 WHERE m_type=$3 AND id=$4",
-				deltaValue, valueValue, metric.MType, metric.ID,
-			)
-		} else {
-			_, err = tx.ExecContext(
-				ctx,
-				"INSERT INTO metrics (id, m_type, delta, value) VALUES($1,$2,$3,$4)",
-				metric.ID, metric.MType, deltaValue, valueValue,
-			)
-		}
+		metricsList = append(metricsList, &models.Metrics{ID: metricName, MType: Counter, Delta: &metricValue})
+	}
+	for metricName, metricValue := range ms.Gauge {
+		err = db.insertOrUpdateMetrics(ctx, tx, metricName, Gauge, metricValue, nil)
 		if err != nil {
 			tx.Rollback()
 			return nil, err
 		}
-		metricsList = append(metricsList, &metric)
+		metricsList = append(metricsList, &models.Metrics{ID: metricName, MType: Gauge, Value: &metricValue})
 	}
 	tx.Commit()
 	return metricsList, nil
+}
+
+type ExecSqlModel interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
+func (db *DatabaseSQL) insertOrUpdateMetrics(
+	ctx context.Context,
+	sqlModel ExecSqlModel,
+	ID string,
+	MType string,
+	Delta interface{},
+	Value interface{},
+) error {
+	row := db.sqlDB.QueryRowContext(
+		ctx,
+		"SELECT COUNT(*) FROM metrics WHERE m_type=$1 AND id=$2",
+		MType, ID,
+	)
+	var exist int64
+	err := row.Scan(&exist)
+	if err != nil {
+		return err
+	}
+	if exist > 0 {
+		_, err = sqlModel.ExecContext(
+			ctx,
+			"UPDATE metrics SET delta=$1, value=$2 WHERE m_type=$3 AND id=$4",
+			Delta, Value, MType, ID,
+		)
+	} else {
+		_, err = sqlModel.ExecContext(
+			ctx,
+			"INSERT INTO metrics (id, m_type, delta, value) VALUES($1,$2,$3,$4)",
+			ID, MType, Delta, Value,
+		)
+	}
+	return nil
 }
 
 func (db *DatabaseSQL) Get(ctx context.Context, metricType string, metricName string) (*models.Metrics, error) {
