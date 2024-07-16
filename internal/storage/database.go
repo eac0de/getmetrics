@@ -216,7 +216,6 @@ func (db *DatabaseSQL) SaveMany(ctx context.Context, umList []*models.UnknownMet
 			)
 		}
 		if err != nil {
-			println(err.Error())
 			tx.Rollback()
 			return nil, err
 		}
@@ -230,7 +229,6 @@ func (db *DatabaseSQL) Get(ctx context.Context, metricType string, metricName st
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	var metric models.Metrics
-	println(metricType, metricName)
 	row := db.sqlDB.QueryRowContext(
 		ctx,
 		"SELECT id, m_type, delta, value FROM metrics WHERE m_type=$1 AND id=$2",
