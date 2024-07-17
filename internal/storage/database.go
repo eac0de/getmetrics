@@ -69,7 +69,7 @@ func (db *DatabaseSQL) Save(ctx context.Context, um *models.UnknownMetrics) (*mo
 		}
 		metric.Value = &metricValueFloat
 		metric.MType = Gauge
-		err = db.insertOrUpdateMetrics(ctx, db.sqlDB, metric.ID, Gauge, metricValueFloat, nil)
+		err = db.insertOrUpdateMetrics(ctx, db.sqlDB, metric.ID, Gauge, nil, metricValueFloat)
 		if err != nil {
 			return nil, fmt.Errorf("metric saving error")
 		}
@@ -172,7 +172,7 @@ func (db *DatabaseSQL) SaveMany(ctx context.Context, umList []*models.UnknownMet
 		metricsList = append(metricsList, &models.Metrics{ID: metricName, MType: Counter, Delta: &metricValue})
 	}
 	for metricName, metricValue := range ms.Gauge {
-		err = db.insertOrUpdateMetrics(ctx, tx, metricName, Gauge, metricValue, nil)
+		err = db.insertOrUpdateMetrics(ctx, tx, metricName, Gauge, nil, metricValue)
 		if err != nil {
 			tx.Rollback()
 			return nil, err
