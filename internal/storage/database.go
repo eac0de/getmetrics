@@ -53,6 +53,7 @@ func (db *DatabaseSQL) Save(ctx context.Context, um *models.UnknownMetrics) (*mo
 	defer db.mu.Unlock()
 	var err error
 	var metric models.Metrics
+	metric.ID = um.ID
 	switch um.MType {
 	case Gauge:
 		metricValueFloat, ok := um.DeltaValue.(float64)
@@ -68,6 +69,10 @@ func (db *DatabaseSQL) Save(ctx context.Context, um *models.UnknownMetrics) (*mo
 		}
 		metric.Value = &metricValueFloat
 		metric.MType = Gauge
+		err = db.insertOrUpdateMetrics(ctx, db.sqlDB, metric.ID, Gauge, metricValueFloat, nil)
+		if err != nil {
+			return nil, fmt.Errorf("metric saving error")
+		}
 	case Counter:
 		metricValueInt, ok := um.DeltaValue.(int64)
 		if !ok {
@@ -90,43 +95,13 @@ func (db *DatabaseSQL) Save(ctx context.Context, um *models.UnknownMetrics) (*mo
 		}
 		metric.Delta = &metricValueInt
 		metric.MType = Counter
+		err = db.insertOrUpdateMetrics(ctx, db.sqlDB, metric.ID, Counter, metricValueInt, nil)
+		if err != nil {
+			return nil, fmt.Errorf("metric saving error")
+		}
 	default:
 		// Обработка некорректного типа метрики
 		return nil, fmt.Errorf("invalid metric type")
-	}
-	metric.ID = um.ID
-	var deltaValue, valueValue interface{}
-	if metric.Delta != nil {
-		deltaValue = *metric.Delta
-	}
-	if metric.Value != nil {
-		valueValue = *metric.Value
-	}
-	row := db.sqlDB.QueryRowContext(
-		ctx,
-		"SELECT COUNT(*) FROM metrics WHERE m_type = $1 AND id = $2",
-		metric.MType, metric.ID,
-	)
-	var exist int64
-	err = row.Scan(&exist)
-	if err != nil {
-		return nil, fmt.Errorf("metric scan error")
-	}
-	if exist > 0 {
-		_, err = db.sqlDB.ExecContext(
-			ctx,
-			"UPDATE metrics SET delta=$1, value=$2 WHERE m_type =$3  AND id =$4",
-			deltaValue, valueValue, metric.MType, metric.ID,
-		)
-	} else {
-		_, err = db.sqlDB.ExecContext(
-			ctx,
-			"INSERT INTO metrics (id, m_type, delta, value) VALUES($1,$2,$3,$4)",
-			metric.ID, metric.MType, deltaValue, valueValue,
-		)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("metric saving error")
 	}
 	return &metric, nil
 }

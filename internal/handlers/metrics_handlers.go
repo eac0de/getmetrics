@@ -76,6 +76,7 @@ func (mhs *metricsHandlerService) UpdateMetricJSONHandler() func(http.ResponseWr
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		fmt.Println(buf.String())
 		if err = json.Unmarshal(buf.Bytes(), &newMetric); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
