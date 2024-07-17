@@ -62,13 +62,20 @@ func (a *Agent) StartPoll(ctx context.Context) {
 
 func (a *Agent) StartSendReport(ctx context.Context) {
 	ticker := time.NewTicker(a.conf.ReportInterval)
+	var err error
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("Report goroutine is shutting down...")
+			log.Println("Goroutine sending reports has been shut down...")
 			return
 		case <-ticker.C:
-			a.sendMetrics(a.metrics)
+			for waitTime := 1; waitTime <= 5; waitTime += 2 {
+				err = a.sendMetrics(a.metrics)
+				if err != nil {
+					fmt.Printf("Report sending error: %s. New attempt in %v sec\n", err.Error(), waitTime)
+					time.Sleep(time.Duration(waitTime) * time.Second)
+				}
+			}
 		}
 	}
 }
@@ -185,7 +192,7 @@ func (a *Agent) collectMetrics() *Metrics {
 // 	return a.sendMetric(&metric)
 // }
 
-func (a *Agent) sendMetrics(metrics *Metrics) {
+func (a *Agent) sendMetrics(metrics *Metrics) error {
 	values := models.SystemMetrics{
 		Gauge: map[string]float64{
 			"Alloc":         metrics.Alloc,
@@ -230,13 +237,11 @@ func (a *Agent) sendMetrics(metrics *Metrics) {
 	}
 	metricsListJSON, err := json.Marshal(metricsList)
 	if err != nil {
-		fmt.Printf("send metrics error: %s", err.Error())
-		return
+		return err
 	}
 	metricGzip, err := compressor.GzipData(metricsListJSON)
 	if err != nil {
-		fmt.Printf("send metrics error: %s", err.Error())
-		return
+		return err
 	}
 	url := fmt.Sprintf("%s/updates/", a.conf.ServerURL)
 	resp, err := a.client.
@@ -246,11 +251,10 @@ func (a *Agent) sendMetrics(metrics *Metrics) {
 		SetBody(metricGzip).
 		Post(url)
 	if err != nil {
-		fmt.Printf("send metrics error: %s", err.Error())
-		return
+		return err
 	}
 	if resp.StatusCode() != http.StatusOK {
-		fmt.Printf("send metrics error: %s", resp.Body())
-		return
+		return fmt.Errorf("send metrics error: %s", resp.Body())
 	}
+	return nil
 }

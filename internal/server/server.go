@@ -2,8 +2,11 @@ package server
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/eac0de/getmetrics/internal/config"
 	"github.com/eac0de/getmetrics/internal/handlers"
@@ -11,6 +14,8 @@ import (
 	"github.com/eac0de/getmetrics/internal/storage"
 	"github.com/eac0de/getmetrics/pkg/middlewares"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type metricsService struct {
@@ -39,8 +44,25 @@ func (s *metricsService) Run(ctx context.Context) {
 	r.Use(middlewares.LoggerMiddleware)
 	contentTypesForCompress := "application/json text/html"
 	r.Use(middlewares.GetGzipMiddleware(contentTypesForCompress))
+	var err error
+	var db *storage.DatabaseSQL
+	for waitTime := 1; waitTime <= 5; waitTime += 2 {
+		db, err = storage.NewDatabaseSQL(ctx, s.conf.DatabaseDSN)
+		if err != nil {
+			fmt.Println(err.Error())
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) {
+				fmt.Println(pgErr.Code)
+				if pgerrcode.IsConnectionException(pgErr.Code) {
+					fmt.Printf("Database connection error. New attempt in %v sec\n", waitTime)
+					time.Sleep(time.Duration(waitTime) * time.Second)
+					continue
+				}
+			}
+		}
+		break
+	}
 
-	db, err := storage.NewDatabaseSQL(ctx, s.conf.DatabaseDSN)
 	if err != nil {
 		store := storage.NewMetricsStorage(s.conf.FileStoragePath)
 		go store.StartSavingMetricsToFile(ctx, s.conf.FileStoragePath, s.conf.StoreInterval)
