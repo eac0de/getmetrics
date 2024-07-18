@@ -12,6 +12,7 @@ import (
 	"github.com/eac0de/getmetrics/internal/storage"
 	"github.com/eac0de/getmetrics/pkg/middlewares"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 type metricsService struct {
@@ -38,6 +39,7 @@ func (s *metricsService) Run(ctx context.Context) {
 
 	r := chi.NewRouter()
 	r.Use(middlewares.LoggerMiddleware)
+	r.Use(middleware.Recoverer)
 	contentTypesForCompress := "application/json text/html"
 	r.Use(middlewares.GetGzipMiddleware(contentTypesForCompress))
 
