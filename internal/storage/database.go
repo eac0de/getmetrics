@@ -72,10 +72,6 @@ func (db *DatabaseSQL) Save(ctx context.Context, um *models.UnknownMetrics) (*mo
 		}
 		metric.Value = &metricValueFloat
 		metric.MType = Gauge
-		err = db.insertOrUpdateMetric(ctx, db.sqlDB, metric.ID, Gauge, nil, metricValueFloat)
-		if err != nil {
-			return nil, fmt.Errorf("metric saving error")
-		}
 	case Counter:
 		metricValueInt, ok := um.DeltaValue.(int64)
 		if !ok {
@@ -88,23 +84,36 @@ func (db *DatabaseSQL) Save(ctx context.Context, um *models.UnknownMetrics) (*mo
 				return nil, fmt.Errorf("invalid value type for counter metric(2)")
 			}
 		}
-		row := db.sqlDB.QueryRowContext(
-			ctx, "SELECT delta FROM metrics WHERE m_type = $1 AND id = $2", um.MType, um.ID,
+		query := "SELECT delta FROM metrics WHERE m_type = $1 AND id = $2"
+		rows, err := db.queryWithRetry(
+			ctx, db.sqlDB, query, um.MType, um.ID,
 		)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		rows.Next()
 		var oldValue sql.NullInt64
-		row.Scan(&oldValue)
+		rows.Scan(&oldValue)
 		if oldValue.Valid {
 			metricValueInt += oldValue.Int64
 		}
 		metric.Delta = &metricValueInt
 		metric.MType = Counter
-		err = db.insertOrUpdateMetric(ctx, db.sqlDB, metric.ID, Counter, metricValueInt, nil)
-		if err != nil {
-			return nil, fmt.Errorf("metric saving error")
-		}
 	default:
 		// Обработка некорректного типа метрики
 		return nil, fmt.Errorf("invalid metric type")
+	}
+	var delta, value interface{}
+	if metric.Delta != nil {
+		delta = *metric.Delta
+	}
+	if metric.Value != nil {
+		delta = *metric.Value
+	}
+	err = db.insertOrUpdateMetric(ctx, db.sqlDB, metric.ID, metric.MType, delta, value)
+	if err != nil {
+		return nil, fmt.Errorf("metric saving error")
 	}
 	return &metric, nil
 }
@@ -156,31 +165,42 @@ func (db *DatabaseSQL) SaveMany(ctx context.Context, umList []*models.UnknownMet
 		return nil, err
 	}
 	metricsList := []*models.Metrics{}
+	var errList []error
 	for metricName, metricValue := range ms.Counter {
-		row := db.sqlDB.QueryRowContext(
-			ctx,
-			"SELECT delta FROM metrics WHERE m_type = $1 AND id = $2",
-			Counter, metricName,
+		query := "SELECT delta FROM metrics WHERE m_type = $1 AND id = $2"
+		rows, err := db.queryWithRetry(
+			ctx, db.sqlDB, query, Counter, metricName,
 		)
+		if err != nil {
+			errList = append(errList, err)
+			continue
+		}
+		defer rows.Close()
+		rows.Next()
 		var oldValue sql.NullInt64
-		row.Scan(&oldValue)
+		rows.Scan(&oldValue)
 		if oldValue.Valid {
 			metricValue += oldValue.Int64
 		}
 		err = db.insertOrUpdateMetric(ctx, tx, metricName, Counter, metricValue, nil)
 		if err != nil {
-			tx.Rollback()
-			return nil, err
+			errList = append(errList, err)
+			continue
 		}
 		metricsList = append(metricsList, &models.Metrics{ID: metricName, MType: Counter, Delta: &metricValue})
 	}
 	for metricName, metricValue := range ms.Gauge {
 		err = db.insertOrUpdateMetric(ctx, tx, metricName, Gauge, nil, metricValue)
 		if err != nil {
-			tx.Rollback()
-			return nil, err
+			errList = append(errList, err)
+			continue
 		}
 		metricsList = append(metricsList, &models.Metrics{ID: metricName, MType: Gauge, Value: &metricValue})
+	}
+	err = errors.Join(errList...)
+	if err != nil {
+		tx.Rollback()
+		return nil, err
 	}
 	tx.Commit()
 	return metricsList, nil
@@ -195,8 +215,6 @@ type QuerySQLModel interface {
 }
 
 func (db *DatabaseSQL) execWithRetry(ctx context.Context, model ExecSQLModel, query string, args ...any) (sql.Result, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 	var err error
 	var result sql.Result
 	for waitTime := 1; waitTime <= 5; waitTime += 2 {
@@ -222,10 +240,8 @@ func (db *DatabaseSQL) execWithRetry(ctx context.Context, model ExecSQLModel, qu
 }
 
 func (db *DatabaseSQL) queryWithRetry(ctx context.Context, model QuerySQLModel, query string, args ...any) (*sql.Rows, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	var err error
 	var result *sql.Rows
+	var err error
 	for waitTime := 1; waitTime <= 5; waitTime += 2 {
 		result, err = model.QueryContext(ctx, query, args...)
 		if err != nil {
@@ -248,16 +264,49 @@ func (db *DatabaseSQL) queryWithRetry(ctx context.Context, model QuerySQLModel, 
 	return result, nil
 }
 
-func (db *DatabaseSQL) getMetric(ctx context.Context, metricName string, metricType string) (*models.Metrics, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+func (db *DatabaseSQL) insertOrUpdateMetric(
+	ctx context.Context,
+	sqlModel ExecSQLModel,
+	ID string,
+	MType string,
+	Delta interface{},
+	Value interface{},
+) error {
+	query := "SELECT COUNT(*) FROM metrics WHERE m_type=$1 AND id=$2"
+	rows, err := db.queryWithRetry(ctx, db.sqlDB, query, MType, ID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	rows.Next()
+	var exist int64
+	err = rows.Scan(&exist)
+	if err != nil {
+		return err
+	}
+	if exist > 0 {
+		query = "UPDATE metrics SET delta=$3, value=$4 WHERE m_type=$2 AND id=$1"
+	} else {
+		query = "INSERT INTO metrics (id, m_type, delta, value) VALUES($1,$2,$3,$4)"
+	}
+	_, err = db.execWithRetry(ctx, sqlModel, query, ID, MType, Delta, Value)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (db *DatabaseSQL) Get(ctx context.Context, metricType string, metricName string) (*models.Metrics, error) {
 	query := "SELECT id, m_type, delta, value FROM metrics WHERE m_type=$1 AND id=$2"
 	rows, err := db.queryWithRetry(ctx, db.sqlDB, query, metricType, metricName)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	rows.Next()
+	exists := rows.Next()
+	if !exists {
+		return nil, fmt.Errorf("metric %s with type %s not found", metricName, metricType)
+	}
 	var metric models.Metrics
 	var delta sql.NullInt64
 	var value sql.NullFloat64
@@ -274,68 +323,12 @@ func (db *DatabaseSQL) getMetric(ctx context.Context, metricName string, metricT
 	return &metric, nil
 }
 
-func (db *DatabaseSQL) insertOrUpdateMetric(
-	ctx context.Context,
-	sqlModel ExecSQLModel,
-	ID string,
-	MType string,
-	Delta interface{},
-	Value interface{},
-) error {
+func (db *DatabaseSQL) GetAll(ctx context.Context) ([]*models.Metrics, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	row := db.sqlDB.QueryRowContext(
-		ctx,
-		"SELECT COUNT(*) FROM metrics WHERE m_type=$1 AND id=$2",
-		MType, ID,
-	)
-	var exist int64
-	err := row.Scan(&exist)
-	if err != nil {
-		return err
-	}
-	var query string
-	if exist > 0 {
-		query = "UPDATE metrics SET delta=$3, value=$4 WHERE m_type=$1 AND id=$2"
-	} else {
-		query = "INSERT INTO metrics (id, m_type, delta, value) VALUES($1,$2,$3,$4)"
-	}
-	for waitTime := 1; waitTime <= 5; waitTime += 2 {
-		_, err = sqlModel.ExecContext(
-			ctx,
-			query,
-			MType, ID, Delta, Value,
-		)
-		if err != nil {
-			fmt.Println(err.Error())
-			var pgErr *pgconn.PgError
-			if errors.As(err, &pgErr) {
-				fmt.Println(pgErr.Code)
-				if pgerrcode.IsConnectionException(pgErr.Code) {
-					fmt.Printf("Database connection error. New attempt in %v sec\n", waitTime)
-					time.Sleep(time.Duration(waitTime) * time.Second)
-					continue
-				}
-			}
-		}
-		break
-	}
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (db *DatabaseSQL) Get(ctx context.Context, metricType string, metricName string) (*models.Metrics, error) {
-	return db.getMetric(ctx, metricName, metricType)
-}
-
-func (db *DatabaseSQL) GetAll(ctx context.Context) ([]*models.Metrics, error) {
 	var metrics []*models.Metrics
-	rows, err := db.sqlDB.QueryContext(
-		ctx,
-		"SELECT id, m_type, delta, value FROM metrics",
-	)
+	query := "SELECT id, m_type, delta, value FROM metrics"
+	rows, err := db.queryWithRetry(ctx, db.sqlDB, query)
 	if err != nil {
 		return nil, err
 	}

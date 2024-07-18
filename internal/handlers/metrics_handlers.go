@@ -55,7 +55,6 @@ func (mhs *metricsHandlerService) UpdateMetricHandler() func(http.ResponseWriter
 		var value interface{}
 		switch metric.MType {
 		case storage.Counter:
-
 			value = *metric.Delta
 		case storage.Gauge:
 			value = *metric.Value
@@ -76,7 +75,6 @@ func (mhs *metricsHandlerService) UpdateMetricJSONHandler() func(http.ResponseWr
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		fmt.Println(buf.String())
 		if err = json.Unmarshal(buf.Bytes(), &newMetric); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -133,7 +131,6 @@ func (mhs *metricsHandlerService) UpdateManyMetricJSONHandler() func(http.Respon
 		}
 		var umList []*models.UnknownMetrics
 		for _, metric := range newMetricList {
-
 			if metric.ID == "" {
 				http.Error(w, "metric name is required", http.StatusNotFound)
 				return
@@ -222,10 +219,9 @@ func (mhs *metricsHandlerService) GetMetricJSONHandler() func(http.ResponseWrite
 			http.Error(w, "metric name is required", http.StatusNotFound)
 			return
 		}
-		metric, _ := mhs.metricsStore.Get(r.Context(), metricType, metricName)
-		if metric == nil {
-			errorMessage := fmt.Sprintf("metric %s not found", metricName)
-			http.Error(w, errorMessage, http.StatusNotFound)
+		metric, err := mhs.metricsStore.Get(r.Context(), metricType, metricName)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
 		metricJSON, _ := json.Marshal(metric)
