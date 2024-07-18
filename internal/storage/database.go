@@ -93,6 +93,9 @@ func (db *DatabaseSQL) Save(ctx context.Context, um *models.UnknownMetrics) (*mo
 		}
 		defer rows.Close()
 		rows.Next()
+		if rows.Err() != nil {
+			return nil, rows.Err()
+		}
 		var oldValue sql.NullInt64
 		rows.Scan(&oldValue)
 		if oldValue.Valid {
@@ -177,6 +180,9 @@ func (db *DatabaseSQL) SaveMany(ctx context.Context, umList []*models.UnknownMet
 		}
 		defer rows.Close()
 		rows.Next()
+		if rows.Err() != nil {
+			return nil, rows.Err()
+		}
 		var oldValue sql.NullInt64
 		rows.Scan(&oldValue)
 		if oldValue.Valid {
@@ -279,6 +285,9 @@ func (db *DatabaseSQL) insertOrUpdateMetric(
 	}
 	defer rows.Close()
 	rows.Next()
+	if rows.Err() != nil {
+		return rows.Err()
+	}
 	var exist int64
 	err = rows.Scan(&exist)
 	if err != nil {
@@ -306,6 +315,9 @@ func (db *DatabaseSQL) Get(ctx context.Context, metricType string, metricName st
 	exists := rows.Next()
 	if !exists {
 		return nil, fmt.Errorf("metric %s with type %s not found", metricName, metricType)
+	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
 	}
 	var metric models.Metrics
 	var delta sql.NullInt64
