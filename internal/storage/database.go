@@ -112,7 +112,7 @@ func (db *DatabaseSQL) Save(ctx context.Context, um *models.UnknownMetrics) (*mo
 		delta = *metric.Delta
 	}
 	if metric.Value != nil {
-		delta = *metric.Value
+		value = *metric.Value
 	}
 	err = db.insertOrUpdateMetric(ctx, db.sqlDB, metric.ID, metric.MType, delta, value)
 	if err != nil {
