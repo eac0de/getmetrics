@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 
@@ -15,16 +14,14 @@ import (
 )
 
 type metricsService struct {
-	conf    *config.HTTPServerConfig
-	storage storage.MetricsStorer
+	conf *config.HTTPServerConfig
 }
 
 func NewMetricsService(
 	conf *config.HTTPServerConfig,
 ) *metricsService {
 	return &metricsService{
-		conf:    conf,
-		storage: nil,
+		conf: conf,
 	}
 }
 
@@ -34,6 +31,8 @@ func (s *metricsService) Stop(cancel context.CancelFunc) {
 }
 
 func (s *metricsService) Run(ctx context.Context) {
+	storage := storage.NewMetricsStorage(ctx, *s.conf)
+	defer storage.Close()
 	logger.InitLogger(s.conf.LogLevel)
 
 	r := chi.NewRouter()
@@ -41,22 +40,10 @@ func (s *metricsService) Run(ctx context.Context) {
 	contentTypesForCompress := "application/json text/html"
 	r.Use(middlewares.GetGzipMiddleware(contentTypesForCompress))
 
-	db, err := storage.NewDatabaseSQL(ctx, s.conf.DatabaseDSN)
-	if err != nil {
-		fmt.Printf("Database initialization ended with an error: %v\n", err.Error())
-		store := storage.NewMetricsStorage(s.conf.FileStoragePath)
-		go store.StartSavingMetricsToFile(ctx, s.conf.FileStoragePath, s.conf.StoreInterval)
-		s.storage = store
-	} else {
-		defer db.Close()
-		handlers.RegisterDatabaseHandlers(r, db)
-		s.storage = db
-	}
-
-	handlers.RegisterMetricsHandlers(r, s.storage)
+	handlers.RegisterMetricsHandlers(r, storage)
 
 	log.Printf("Server http://%s is running. Press Ctrl+C to stop.", s.conf.Addr)
-	err = http.ListenAndServe(s.conf.Addr, r)
+	err := http.ListenAndServe(s.conf.Addr, r)
 	if err != nil {
 		logger.Log.Fatal(err.Error())
 	}

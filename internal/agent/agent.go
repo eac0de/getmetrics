@@ -149,49 +149,6 @@ func (a *Agent) collectMetrics() *Metrics {
 	}
 }
 
-// func (a *Agent) sendMetric(metric *models.Metrics) error {
-// 	metricJSON, err := json.Marshal(metric)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	metricGzip, err := compressor.GzipData(metricJSON)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	url := fmt.Sprintf("%s/update/", a.conf.ServerURL)
-// 	resp, err := a.client.
-// 		R().
-// 		SetHeader("Content-Type", "application/json").
-// 		SetHeader("Content-Encoding", "gzip").
-// 		SetBody(metricGzip).
-// 		Post(url)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	if resp.StatusCode() != http.StatusOK {
-// 		return fmt.Errorf("%s", resp.Body())
-// 	}
-// 	return nil
-// }
-
-// func (a *Agent) sendCounterMetric(metricName string, delta int64) error {
-// 	metric := models.Metrics{
-// 		ID:    metricName,
-// 		MType: storage.Counter,
-// 		Delta: &delta,
-// 	}
-// 	return a.sendMetric(&metric)
-// }
-
-// func (a *Agent) sendGaugeMetric(metricName string, value float64) error {
-// 	metric := models.Metrics{
-// 		ID:    metricName,
-// 		MType: storage.Gauge,
-// 		Value: &value,
-// 	}
-// 	return a.sendMetric(&metric)
-// }
-
 func (a *Agent) sendMetrics(metrics *Metrics) error {
 	values := models.SystemMetrics{
 		Gauge: map[string]float64{
