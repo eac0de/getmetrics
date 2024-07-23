@@ -55,8 +55,6 @@ func (mems *memoryStorage) Save(ctx context.Context, metric models.Metrics) (*mo
 }
 
 func (mems *memoryStorage) SaveMany(ctx context.Context, metricsList []models.Metrics) ([]*models.Metrics, error) {
-	mems.mu.Lock()
-	defer mems.mu.Unlock()
 	metricsList, err := mems.MergeMetricsList(metricsList)
 	if err != nil {
 		return nil, err
@@ -79,8 +77,6 @@ func (mems *memoryStorage) SaveMany(ctx context.Context, metricsList []models.Me
 }
 
 func (mems *memoryStorage) Get(ctx context.Context, metricName string, metricType string) (*models.Metrics, error) {
-	mems.mu.Lock()
-	defer mems.mu.Unlock()
 	var metric models.Metrics
 	switch metricType {
 	case models.Gauge:
@@ -104,8 +100,6 @@ func (mems *memoryStorage) Get(ctx context.Context, metricName string, metricTyp
 }
 
 func (mems *memoryStorage) GetAll(ctx context.Context) ([]*models.Metrics, error) {
-	mems.mu.Lock()
-	defer mems.mu.Unlock()
 	var metrics []*models.Metrics
 	for name, value := range mems.MetricsMap.Gauge {
 		valueCopy := value
