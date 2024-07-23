@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 
 	"github.com/eac0de/getmetrics/internal/models"
 )
 
 type memoryStorage struct {
+	mu         sync.Mutex
 	MetricsMap models.MetricsMap
 }
 
@@ -25,6 +27,8 @@ func NewMemoryStorage() *memoryStorage {
 }
 
 func (mems *memoryStorage) Save(ctx context.Context, metric models.Metrics) (*models.Metrics, error) {
+	mems.mu.Lock()
+	defer mems.mu.Unlock()
 	if metric.ID == "" {
 		return nil, NewErrorWithHTTPStatus(fmt.Errorf("metric name is required"), http.StatusNotFound)
 	}
@@ -51,6 +55,8 @@ func (mems *memoryStorage) Save(ctx context.Context, metric models.Metrics) (*mo
 }
 
 func (mems *memoryStorage) SaveMany(ctx context.Context, metricsList []models.Metrics) ([]*models.Metrics, error) {
+	mems.mu.Lock()
+	defer mems.mu.Unlock()
 	metricsList, err := mems.MergeMetricsList(metricsList)
 	if err != nil {
 		return nil, err
@@ -73,6 +79,8 @@ func (mems *memoryStorage) SaveMany(ctx context.Context, metricsList []models.Me
 }
 
 func (mems *memoryStorage) Get(ctx context.Context, metricName string, metricType string) (*models.Metrics, error) {
+	mems.mu.Lock()
+	defer mems.mu.Unlock()
 	var metric models.Metrics
 	switch metricType {
 	case models.Gauge:
@@ -96,6 +104,8 @@ func (mems *memoryStorage) Get(ctx context.Context, metricName string, metricTyp
 }
 
 func (mems *memoryStorage) GetAll(ctx context.Context) ([]*models.Metrics, error) {
+	mems.mu.Lock()
+	defer mems.mu.Unlock()
 	var metrics []*models.Metrics
 	for name, value := range mems.MetricsMap.Gauge {
 		valueCopy := value

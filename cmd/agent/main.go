@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/eac0de/getmetrics/internal/agent"
+	"github.com/eac0de/getmetrics/app/agent"
 	"github.com/eac0de/getmetrics/internal/config"
 )
 

@@ -12,7 +12,7 @@ import (
 const EmptyFilename = ""
 
 type fileStorage struct {
-	memoryStorage
+	*memoryStorage
 	Filename     string
 	SaveInterval time.Duration
 }
@@ -27,7 +27,7 @@ func NewFileStorage(ctx context.Context, filename string, saveInterval time.Dura
 	}
 	memoryStorage := NewMemoryStorage()
 	fs := fileStorage{
-		memoryStorage: *memoryStorage,
+		memoryStorage: memoryStorage,
 		Filename:      filename,
 		SaveInterval:  saveInterval,
 	}

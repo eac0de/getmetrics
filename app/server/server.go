@@ -6,44 +6,30 @@ import (
 	"net/http"
 
 	"github.com/eac0de/getmetrics/internal/config"
-	"github.com/eac0de/getmetrics/internal/handlers"
 	"github.com/eac0de/getmetrics/internal/logger"
+	"github.com/eac0de/getmetrics/internal/routers"
 	"github.com/eac0de/getmetrics/internal/storage"
-	"github.com/eac0de/getmetrics/pkg/middlewares"
-	"github.com/go-chi/chi/v5"
 )
 
 type metricsService struct {
 	conf    *config.HTTPServerConfig
 	storage *storage.MetricsStorage
-	chi.Mux
+	router  routers.Router
 }
 
 func NewMetricsService(
+	ctx context.Context,
 	conf *config.HTTPServerConfig,
 ) *metricsService {
-	logger.InitLogger(s.conf.LogLevel)
-	storage := storage.NewMetricsStorage(ctx, *s.conf)
-	s.storage = storage
-	r := chi.NewRouter()
-	r.Use(middlewares.LoggerMiddleware)
-	contentTypesForCompress := "application/json text/html"
-	r.Use(middlewares.GetGzipMiddleware(contentTypesForCompress))
-
-	metricsHandlerService := handlers.NewMetricsHandlerService(storage)
-
-	r.Get("/", metricsHandlerService.ShowMetricsSummaryHandler())
-
-	r.Post("/update/{metricType}/{metricName}/{metricValue}", metricsHandlerService.UpdateMetricHandler())
-	r.Post("/update/", metricsHandlerService.UpdateMetricJSONHandler())
-	r.Post("/updates/", metricsHandlerService.UpdateManyMetricsJSONHandler())
-
-	r.Get("/value/{metricType}/{metricName}", metricsHandlerService.GetMetricHandler())
-	r.Post("/value/", metricsHandlerService.GetMetricJSONHandler())
-
-	r.Get("/ping", metricsHandlerService.PingHandler())
+	logger.InitLogger(conf.LogLevel)
+	storage := storage.NewMetricsStorage(ctx, *conf)
+	router := routers.NewRouter()
+	router.AddMiddlewares()
+	router.RegisterMetricsHandlers(storage)
 	return &metricsService{
-		conf: conf,
+		conf:    conf,
+		storage: storage,
+		router:  *router,
 	}
 }
 
@@ -55,10 +41,9 @@ func (s *metricsService) Stop(cancel context.CancelFunc) {
 	log.Println("Server stopped")
 }
 
-func (s *metricsService) Run(ctx context.Context) {
-	mux := http.NewServeMux()
+func (s *metricsService) Run() {
 	log.Printf("Server http://%s is running. Press Ctrl+C to stop", s.conf.Addr)
-	err := mux.ListenAndServe(s.conf.Addr, r)
+	err := http.ListenAndServe(s.conf.Addr, s.router)
 	if err != nil {
 		logger.Log.Fatal(err.Error())
 	}

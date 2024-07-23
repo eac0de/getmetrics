@@ -18,17 +18,17 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-type metricsHandlerService struct {
+type MetricsHandlerService struct {
 	metricsStorage storage.MetricsStorer
 }
 
-func NewMetricsHandlerService(ms storage.MetricsStorer) *metricsHandlerService {
-	return &metricsHandlerService{
+func NewMetricsHandlerService(ms storage.MetricsStorer) *MetricsHandlerService {
+	return &MetricsHandlerService{
 		metricsStorage: ms,
 	}
 }
 
-func (mhs *metricsHandlerService) UpdateMetricHandler() func(http.ResponseWriter, *http.Request) {
+func (mhs *MetricsHandlerService) UpdateMetricHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricType := chi.URLParam(r, "metricType")
 		metricName := chi.URLParam(r, "metricName")
@@ -73,7 +73,7 @@ func (mhs *metricsHandlerService) UpdateMetricHandler() func(http.ResponseWriter
 	}
 }
 
-func (mhs *metricsHandlerService) UpdateMetricJSONHandler() func(http.ResponseWriter, *http.Request) {
+func (mhs *MetricsHandlerService) UpdateMetricJSONHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var metric models.Metrics
 		var buf bytes.Buffer
@@ -103,7 +103,7 @@ func (mhs *metricsHandlerService) UpdateMetricJSONHandler() func(http.ResponseWr
 	}
 }
 
-func (mhs *metricsHandlerService) UpdateManyMetricsJSONHandler() func(http.ResponseWriter, *http.Request) {
+func (mhs *MetricsHandlerService) UpdateManyMetricsJSONHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var metricList []models.Metrics
 		var buf bytes.Buffer
@@ -133,7 +133,7 @@ func (mhs *metricsHandlerService) UpdateManyMetricsJSONHandler() func(http.Respo
 	}
 }
 
-func (mhs *metricsHandlerService) GetMetricHandler() func(http.ResponseWriter, *http.Request) {
+func (mhs *MetricsHandlerService) GetMetricHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricName := chi.URLParam(r, "metricName")
 		metricType := chi.URLParam(r, "metricType")
@@ -162,7 +162,7 @@ func (mhs *metricsHandlerService) GetMetricHandler() func(http.ResponseWriter, *
 	}
 }
 
-func (mhs *metricsHandlerService) GetMetricJSONHandler() func(http.ResponseWriter, *http.Request) {
+func (mhs *MetricsHandlerService) GetMetricJSONHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var newMetric models.Metrics
 		var buf bytes.Buffer
@@ -194,7 +194,7 @@ func (mhs *metricsHandlerService) GetMetricJSONHandler() func(http.ResponseWrite
 	}
 }
 
-func (mhs *metricsHandlerService) ShowMetricsSummaryHandler() func(http.ResponseWriter, *http.Request) {
+func (mhs *MetricsHandlerService) ShowMetricsSummaryHandler() func(http.ResponseWriter, *http.Request) {
 	fpath := filepath.Join("templates", "metrics_summary.html")
 	file, err := os.OpenFile(fpath, os.O_RDONLY, 0666)
 	if err != nil {
@@ -230,7 +230,7 @@ func (mhs *metricsHandlerService) ShowMetricsSummaryHandler() func(http.Response
 	}
 }
 
-func (mhs *metricsHandlerService) PingHandler() func(http.ResponseWriter, *http.Request) {
+func (mhs *MetricsHandlerService) PingHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := mhs.metricsStorage.Ping(r.Context()); err != nil {
 			var ewhs *storage.ErrorWithHTTPStatus
