@@ -16,25 +16,12 @@ import (
 type metricsService struct {
 	conf    *config.HTTPServerConfig
 	storage *storage.MetricsStorage
+	chi.Mux
 }
 
 func NewMetricsService(
 	conf *config.HTTPServerConfig,
 ) *metricsService {
-	return &metricsService{
-		conf: conf,
-	}
-}
-
-func (s *metricsService) Stop(cancel context.CancelFunc) {
-	if s.storage != nil {
-		s.storage.Close()
-	}
-	cancel()
-	log.Println("Server stopped")
-}
-
-func (s *metricsService) Run(ctx context.Context) {
 	logger.InitLogger(s.conf.LogLevel)
 	storage := storage.NewMetricsStorage(ctx, *s.conf)
 	s.storage = storage
@@ -55,9 +42,23 @@ func (s *metricsService) Run(ctx context.Context) {
 	r.Post("/value/", metricsHandlerService.GetMetricJSONHandler())
 
 	r.Get("/ping", metricsHandlerService.PingHandler())
+	return &metricsService{
+		conf: conf,
+	}
+}
 
+func (s *metricsService) Stop(cancel context.CancelFunc) {
+	if s.storage != nil {
+		s.storage.Close()
+	}
+	cancel()
+	log.Println("Server stopped")
+}
+
+func (s *metricsService) Run(ctx context.Context) {
+	mux := http.NewServeMux()
 	log.Printf("Server http://%s is running. Press Ctrl+C to stop", s.conf.Addr)
-	err := http.ListenAndServe(s.conf.Addr, r)
+	err := mux.ListenAndServe(s.conf.Addr, r)
 	if err != nil {
 		logger.Log.Fatal(err.Error())
 	}
