@@ -152,7 +152,7 @@ func SelectMetricFromDatabase(
 	defer rows.Close()
 	exists := rows.Next()
 	if !exists {
-		return nil, fmt.Errorf("Metric %s with type %s not found", metricName, metricType)
+		return nil, fmt.Errorf("metric %s with type %s not found", metricName, metricType)
 	}
 	if rows.Err() != nil {
 		return nil, rows.Err()

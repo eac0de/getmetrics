@@ -47,7 +47,7 @@ func (s *metricsService) Run(ctx context.Context) {
 
 	r.Get("/", metricsHandlerService.ShowMetricsSummaryHandler())
 
-	r.Get("/update/{metricType}/{metricName}/{metricValue}", metricsHandlerService.UpdateMetricHandler())
+	r.Post("/update/{metricType}/{metricName}/{metricValue}", metricsHandlerService.UpdateMetricHandler())
 	r.Post("/update/", metricsHandlerService.UpdateMetricJSONHandler())
 	r.Post("/updates/", metricsHandlerService.UpdateManyMetricsJSONHandler())
 

@@ -26,17 +26,17 @@ func NewMemoryStorage() *memoryStorage {
 
 func (mems *memoryStorage) Save(ctx context.Context, metric models.Metrics) (*models.Metrics, error) {
 	if metric.ID == "" {
-		return nil, NewErrorWithHTTPStatus(fmt.Errorf("Metric name is required"), http.StatusNotFound)
+		return nil, NewErrorWithHTTPStatus(fmt.Errorf("metric name is required"), http.StatusNotFound)
 	}
 	switch metric.MType {
 	case models.Gauge:
 		if metric.Value == nil {
-			return nil, NewErrorWithHTTPStatus(fmt.Errorf("Metric %s with type %s must have filled value", metric.ID, models.Gauge), http.StatusBadRequest)
+			return nil, NewErrorWithHTTPStatus(fmt.Errorf("metric %s with type %s must have filled value", metric.ID, models.Gauge), http.StatusBadRequest)
 		}
 		mems.MetricsMap.Gauge[metric.ID] = *metric.Value
 	case models.Counter:
 		if metric.Delta == nil {
-			return nil, NewErrorWithHTTPStatus(fmt.Errorf("Metric %s with type %s must have filled delta", metric.ID, models.Counter), http.StatusBadRequest)
+			return nil, NewErrorWithHTTPStatus(fmt.Errorf("metric %s with type %s must have filled delta", metric.ID, models.Counter), http.StatusBadRequest)
 		}
 		existMetric, err := mems.Get(ctx, metric.ID, metric.MType)
 		oldDelta := int64(0)
@@ -45,7 +45,7 @@ func (mems *memoryStorage) Save(ctx context.Context, metric models.Metrics) (*mo
 		}
 		mems.MetricsMap.Counter[metric.ID] = *metric.Delta + oldDelta
 	default:
-		return nil, NewErrorWithHTTPStatus(fmt.Errorf("Invalid metric type for %s: %s", metric.ID, metric.MType), http.StatusBadRequest)
+		return nil, NewErrorWithHTTPStatus(fmt.Errorf("invalid metric type for %s: %s", metric.ID, metric.MType), http.StatusBadRequest)
 	}
 	return &metric, nil
 }
@@ -78,17 +78,17 @@ func (mems *memoryStorage) Get(ctx context.Context, metricName string, metricTyp
 	case models.Gauge:
 		value, ok := mems.MetricsMap.Gauge[metricName]
 		if !ok {
-			return nil, NewErrorWithHTTPStatus(fmt.Errorf("Metric %s with type %s not found", metricName, metricType), http.StatusNotFound)
+			return nil, NewErrorWithHTTPStatus(fmt.Errorf("metric %s with type %s not found", metricName, metricType), http.StatusNotFound)
 		}
 		metric.Value = &value
 	case models.Counter:
 		delta, ok := mems.MetricsMap.Counter[metricName]
 		if !ok {
-			return nil, NewErrorWithHTTPStatus(fmt.Errorf("Metric %s with type %s not found", metricName, metricType), http.StatusNotFound)
+			return nil, NewErrorWithHTTPStatus(fmt.Errorf("metric %s with type %s not found", metricName, metricType), http.StatusNotFound)
 		}
 		metric.Delta = &delta
 	default:
-		return nil, NewErrorWithHTTPStatus(fmt.Errorf("Invalid type for %s: %s", metricName, metricType), http.StatusBadRequest)
+		return nil, NewErrorWithHTTPStatus(fmt.Errorf("invalid type for %s: %s", metricName, metricType), http.StatusBadRequest)
 	}
 	metric.MType = metricType
 	metric.ID = metricName
@@ -124,7 +124,7 @@ func (mems *memoryStorage) Close() error {
 }
 
 func (mems *memoryStorage) Ping(ctx context.Context) error {
-	return NewErrorWithHTTPStatus(fmt.Errorf("Apparently the database failed to initialize"), http.StatusInternalServerError)
+	return NewErrorWithHTTPStatus(fmt.Errorf("apparently the database failed to initialize"), http.StatusInternalServerError)
 }
 
 func (mems *memoryStorage) MergeMetricsList(metricsList []models.Metrics) ([]models.Metrics, error) {
@@ -137,13 +137,13 @@ func (mems *memoryStorage) MergeMetricsList(metricsList []models.Metrics) ([]mod
 		switch metric.MType {
 		case models.Gauge:
 			if metric.Value == nil {
-				errList = append(errList, NewErrorWithHTTPStatus(fmt.Errorf("Metric %s with type %s must have filled value", metric.ID, models.Gauge), http.StatusBadRequest))
+				errList = append(errList, NewErrorWithHTTPStatus(fmt.Errorf("metric %s with type %s must have filled value", metric.ID, models.Gauge), http.StatusBadRequest))
 				continue
 			}
 			metricsMap.Gauge[metric.ID] = *metric.Value
 		case models.Counter:
 			if metric.Delta == nil {
-				errList = append(errList, NewErrorWithHTTPStatus(fmt.Errorf("Metric %s with type %s must have filled delta", metric.ID, models.Counter), http.StatusBadRequest))
+				errList = append(errList, NewErrorWithHTTPStatus(fmt.Errorf("metric %s with type %s must have filled delta", metric.ID, models.Counter), http.StatusBadRequest))
 				continue
 			}
 			oldDelta, ok := metricsMap.Counter[metric.ID]
@@ -153,7 +153,7 @@ func (mems *memoryStorage) MergeMetricsList(metricsList []models.Metrics) ([]mod
 			delta := *metric.Delta + oldDelta
 			metricsMap.Counter[metric.ID] = delta
 		default:
-			errList = append(errList, NewErrorWithHTTPStatus(fmt.Errorf("Invalid metric type for %s: %s", metric.ID, models.Counter), http.StatusBadRequest))
+			errList = append(errList, NewErrorWithHTTPStatus(fmt.Errorf("invalid metric type for %s: %s", metric.ID, models.Counter), http.StatusBadRequest))
 		}
 	}
 	err := errors.Join(errList...)
