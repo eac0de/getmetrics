@@ -9,7 +9,7 @@ import (
 )
 
 type MetricsStorage struct {
-	mu      *sync.Mutex
+	mu      sync.Mutex
 	storage MetricsStorer
 }
 
@@ -28,13 +28,13 @@ func NewMetricsStorage(ctx context.Context, config config.HTTPServerConfig) *Met
 	return &metric
 }
 
-func (ms *MetricsStorage) Save(ctx context.Context, metric *models.Metrics) error {
+func (ms *MetricsStorage) Save(ctx context.Context, metric models.Metrics) (*models.Metrics, error) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	return ms.storage.Save(ctx, metric)
 }
 
-func (ms *MetricsStorage) SaveMany(ctx context.Context, metricsList []*models.Metrics) error {
+func (ms *MetricsStorage) SaveMany(ctx context.Context, metricsList []models.Metrics) ([]*models.Metrics, error) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	return ms.storage.SaveMany(ctx, metricsList)

@@ -14,7 +14,8 @@ import (
 )
 
 type metricsService struct {
-	conf *config.HTTPServerConfig
+	conf    *config.HTTPServerConfig
+	storage *storage.MetricsStorage
 }
 
 func NewMetricsService(
@@ -26,21 +27,34 @@ func NewMetricsService(
 }
 
 func (s *metricsService) Stop(cancel context.CancelFunc) {
+	if s.storage != nil {
+		s.storage.Close()
+	}
 	cancel()
 	log.Println("Server stopped.")
 }
 
 func (s *metricsService) Run(ctx context.Context) {
-	storage := storage.NewMetricsStorage(ctx, *s.conf)
-	defer storage.Close()
 	logger.InitLogger(s.conf.LogLevel)
-
+	storage := storage.NewMetricsStorage(ctx, *s.conf)
+	s.storage = storage
 	r := chi.NewRouter()
 	r.Use(middlewares.LoggerMiddleware)
 	contentTypesForCompress := "application/json text/html"
 	r.Use(middlewares.GetGzipMiddleware(contentTypesForCompress))
 
-	handlers.RegisterMetricsHandlers(r, storage)
+	metricsHandlerService := handlers.NewMetricsHandlerService(storage)
+
+	r.Get("/", metricsHandlerService.ShowMetricsSummaryHandler())
+
+	r.Get("/update/{metricType}/{metricName}/{metricValue}", metricsHandlerService.UpdateMetricHandler())
+	r.Post("/update/", metricsHandlerService.UpdateMetricJSONHandler())
+	r.Post("/updates/", metricsHandlerService.UpdateManyMetricsJSONHandler())
+
+	r.Get("/value/{metricType}/{metricName}", metricsHandlerService.GetMetricHandler())
+	r.Post("/value/", metricsHandlerService.GetMetricJSONHandler())
+
+	r.Get("/ping", metricsHandlerService.PingHandler())
 
 	log.Printf("Server http://%s is running. Press Ctrl+C to stop.", s.conf.Addr)
 	err := http.ListenAndServe(s.conf.Addr, r)

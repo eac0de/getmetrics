@@ -7,8 +7,8 @@ import (
 )
 
 type MetricsStorer interface {
-	Save(ctx context.Context, metric *models.Metrics) error
-	SaveMany(ctx context.Context, metricsList []*models.Metrics) error
+	Save(ctx context.Context, metric models.Metrics) (*models.Metrics, error)
+	SaveMany(ctx context.Context, metricsList []models.Metrics) ([]*models.Metrics, error)
 	Get(ctx context.Context, metricName string, metricType string) (*models.Metrics, error)
 	GetAll(ctx context.Context) ([]*models.Metrics, error)
 	Close() error

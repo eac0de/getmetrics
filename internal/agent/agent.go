@@ -11,7 +11,6 @@ import (
 
 	"github.com/eac0de/getmetrics/internal/config"
 	"github.com/eac0de/getmetrics/internal/models"
-	"github.com/eac0de/getmetrics/internal/storage"
 	"github.com/eac0de/getmetrics/pkg/compressor"
 	"github.com/go-resty/resty/v2"
 )
@@ -62,20 +61,17 @@ func (a *Agent) StartPoll(ctx context.Context) {
 
 func (a *Agent) StartSendReport(ctx context.Context) {
 	ticker := time.NewTicker(a.conf.ReportInterval)
-	var err error
 	for {
 		select {
 		case <-ctx.Done():
 			log.Println("Goroutine sending reports has been shut down...")
 			return
 		case <-ticker.C:
-			for waitTime := 1; waitTime <= 5; waitTime += 2 {
-				err = a.sendMetrics(a.metrics)
-				if err != nil {
-					fmt.Printf("Report sending error: %s. New attempt in %v sec\n", err.Error(), waitTime)
-					time.Sleep(time.Duration(waitTime) * time.Second)
-				}
+			attempts, err := SendMetricsWithRetry(a.sendMetrics, a.metrics)
+			if err != nil {
+				log.Printf("Not a single attempt has been successful, attemts count: %v\n", attempts)
 			}
+
 		}
 	}
 }
@@ -150,7 +146,7 @@ func (a *Agent) collectMetrics() *Metrics {
 }
 
 func (a *Agent) sendMetrics(metrics *Metrics) error {
-	values := models.SystemMetrics{
+	values := models.MetricsMap{
 		Gauge: map[string]float64{
 			"Alloc":         metrics.Alloc,
 			"BuckHashSys":   metrics.BuckHashSys,
@@ -187,10 +183,10 @@ func (a *Agent) sendMetrics(metrics *Metrics) error {
 	}
 	metricsList := []models.Metrics{}
 	for metricName, metricValue := range values.Gauge {
-		metricsList = append(metricsList, models.Metrics{ID: metricName, MType: storage.Gauge, Value: &metricValue})
+		metricsList = append(metricsList, models.Metrics{ID: metricName, MType: models.Gauge, Value: &metricValue})
 	}
 	for metricName, metricDelta := range values.Counter {
-		metricsList = append(metricsList, models.Metrics{ID: metricName, MType: storage.Counter, Delta: &metricDelta})
+		metricsList = append(metricsList, models.Metrics{ID: metricName, MType: models.Counter, Delta: &metricDelta})
 	}
 	metricsListJSON, err := json.Marshal(metricsList)
 	if err != nil {
@@ -214,4 +210,18 @@ func (a *Agent) sendMetrics(metrics *Metrics) error {
 		return fmt.Errorf("send metrics error: %s", resp.Body())
 	}
 	return nil
+}
+
+func SendMetricsWithRetry(sendMetricsFunc func(*Metrics) error, metrics *Metrics) (uint8, error) {
+	var err error
+	var attemtsCount uint8
+	for waitTime := 1; waitTime <= 5; waitTime += 2 {
+		attemtsCount += 1
+		err = sendMetricsFunc(metrics)
+		if err == nil {
+			return attemtsCount, nil
+		}
+		time.Sleep(time.Duration(waitTime) * time.Second)
+	}
+	return attemtsCount, err
 }
