@@ -53,7 +53,11 @@ func (dbs *databaseStorage) Ping(ctx context.Context) error {
 }
 
 func (dbs *databaseStorage) Get(ctx context.Context, metricName string, metricType string) (*models.Metrics, error) {
-	return database.SelectMetricFromDatabase(ctx, dbs.sqlDB, metricName, metricType)
+	metric, err := database.SelectMetricFromDatabase(ctx, dbs.sqlDB, metricName, metricType)
+	if err != nil {
+		return nil, NewErrorWithHTTPStatus(err, http.StatusNotFound)
+	}
+	return metric, nil
 }
 
 func (dbs *databaseStorage) GetAll(ctx context.Context) ([]*models.Metrics, error) {

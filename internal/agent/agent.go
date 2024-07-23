@@ -33,7 +33,7 @@ func NewAgent(conf *config.AgentConfig) *Agent {
 
 func (a *Agent) Stop(cancel context.CancelFunc) {
 	cancel()
-	log.Println("Agent stopped.")
+	log.Println("Agent stopped")
 }
 
 func (a *Agent) Run(ctx context.Context) {
@@ -42,7 +42,7 @@ func (a *Agent) Run(ctx context.Context) {
 
 	go a.StartSendReport(ctx)
 
-	log.Println("Agent is running. Press Ctrl+C to stop.")
+	log.Println("Agent is running. Press Ctrl+C to stop")
 	<-ctx.Done() // Блокируемся до закрытия канала done
 }
 

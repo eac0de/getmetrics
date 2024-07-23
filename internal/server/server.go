@@ -31,7 +31,7 @@ func (s *metricsService) Stop(cancel context.CancelFunc) {
 		s.storage.Close()
 	}
 	cancel()
-	log.Println("Server stopped.")
+	log.Println("Server stopped")
 }
 
 func (s *metricsService) Run(ctx context.Context) {
@@ -56,7 +56,7 @@ func (s *metricsService) Run(ctx context.Context) {
 
 	r.Get("/ping", metricsHandlerService.PingHandler())
 
-	log.Printf("Server http://%s is running. Press Ctrl+C to stop.", s.conf.Addr)
+	log.Printf("Server http://%s is running. Press Ctrl+C to stop", s.conf.Addr)
 	err := http.ListenAndServe(s.conf.Addr, r)
 	if err != nil {
 		logger.Log.Fatal(err.Error())
