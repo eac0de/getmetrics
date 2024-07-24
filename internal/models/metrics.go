@@ -1,5 +1,10 @@
 package models
 
+const (
+	Gauge   = "gauge"
+	Counter = "counter"
+)
+
 type (
 	Metrics struct {
 		ID    string   `json:"id"`              // имя метрики
@@ -8,7 +13,7 @@ type (
 		Value *float64 `json:"value,omitempty"` // значение метрики в случае передачи gauge
 	}
 
-	SystemMetrics struct {
+	MetricsMap struct {
 		Counter map[string]int64   `json:"counter"`
 		Gauge   map[string]float64 `json:"gauge"`
 	}

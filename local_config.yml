@@ -5,3 +5,4 @@ file_storage_path: /tmp/metrics-db.json
 restore: true
 poll_interval: 2s
 report_interval: 10s
+database_dsn: host=localhost user=postgres password=351762 dbname=getmetrics sslmode=disable

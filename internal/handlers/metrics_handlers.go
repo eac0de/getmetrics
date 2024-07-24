@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -10,55 +11,60 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 
 	"github.com/eac0de/getmetrics/internal/models"
 	"github.com/eac0de/getmetrics/internal/storage"
 	"github.com/go-chi/chi/v5"
 )
 
-type metricsHandlerService struct {
-	metricsStore MetricsStorer
+type MetricsHandlerService struct {
+	metricsStorage storage.MetricsStorer
 }
 
-func NewMetricsHandlerService(m MetricsStorer) *metricsHandlerService {
-	return &metricsHandlerService{
-		metricsStore: m,
+func NewMetricsHandlerService(ms storage.MetricsStorer) *MetricsHandlerService {
+	return &MetricsHandlerService{
+		metricsStorage: ms,
 	}
 }
 
-func RegisterMetricsHandlers(r chi.Router, storage MetricsStorer) {
-	metricsHandlerService := NewMetricsHandlerService(storage)
-	r.Get("/", metricsHandlerService.ShowMetricsSummaryHandler())
-
-	r.Post("/update/{metricType}/{metricName}/{metricValue}", metricsHandlerService.UpdateMetricHandler())
-	r.Post("/update/", metricsHandlerService.UpdateMetricJSONHandler())
-
-	r.Get("/value/{metricType}/{metricName}", metricsHandlerService.GetMetricHandler())
-	r.Post("/value/", metricsHandlerService.GetMetricJSONHandler())
-}
-
-func (mhs *metricsHandlerService) UpdateMetricHandler() func(http.ResponseWriter, *http.Request) {
+func (mhs *MetricsHandlerService) UpdateMetricHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricType := chi.URLParam(r, "metricType")
 		metricName := chi.URLParam(r, "metricName")
 		metricValue := chi.URLParam(r, "metricValue")
-
-		if metricName == "" {
-			http.Error(w, "metric name is required", http.StatusNotFound)
-			return
-		}
-		metric, err := mhs.metricsStore.Save(metricType, metricName, metricValue)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
+		metric := models.Metrics{
+			ID:    metricName,
+			MType: metricType,
 		}
 		var value interface{}
 		switch metric.MType {
-		case storage.Counter:
-
-			value = *metric.Delta
-		case storage.Gauge:
-			value = *metric.Value
+		case models.Counter:
+			Delta, err := strconv.ParseInt(metricValue, 10, 64)
+			if err != nil {
+				http.Error(w, "Invalid value for counter metric", http.StatusBadRequest)
+				return
+			}
+			value = Delta
+			metric.Delta = &Delta
+		case models.Gauge:
+			Value, err := strconv.ParseFloat(metricValue, 64)
+			if err != nil {
+				http.Error(w, "Invalid value for gauge metric", http.StatusBadRequest)
+				return
+			}
+			value = Value
+			metric.Value = &Value
+		}
+		_, err := mhs.metricsStorage.Save(r.Context(), metric)
+		if err != nil {
+			var ewhs *storage.ErrorWithHTTPStatus
+			if errors.As(err, &ewhs) {
+				http.Error(w, ewhs.Error(), ewhs.HTTPStatus)
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+			return
 		}
 		metricStr := fmt.Sprintf("%v", value)
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -67,76 +73,86 @@ func (mhs *metricsHandlerService) UpdateMetricHandler() func(http.ResponseWriter
 	}
 }
 
-func (mhs *metricsHandlerService) UpdateMetricJSONHandler() func(http.ResponseWriter, *http.Request) {
+func (mhs *MetricsHandlerService) UpdateMetricJSONHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var newMetric models.Metrics
+		var metric models.Metrics
 		var buf bytes.Buffer
 		_, err := buf.ReadFrom(r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if err = json.Unmarshal(buf.Bytes(), &newMetric); err != nil {
+		if err = json.Unmarshal(buf.Bytes(), &metric); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		metricType := newMetric.MType
-		metricName := newMetric.ID
-
-		if metricName == "" {
-			http.Error(w, "metric name is required", http.StatusNotFound)
-			return
-		}
-		var metricValue interface{}
-		switch metricType {
-		case storage.Counter:
-			if newMetric.Delta == nil {
-				http.Error(w, "for metric type counter field delta is required", http.StatusBadRequest)
-				return
-			}
-			metricValue = *newMetric.Delta
-		case storage.Gauge:
-			if newMetric.Value == nil {
-				http.Error(w, "for metric type gauge field value is required", http.StatusBadRequest)
-				return
-			}
-			metricValue = *newMetric.Value
-		default:
-			http.Error(w, "invalid metric type", http.StatusBadRequest)
-			return
-		}
-		metric, err := mhs.metricsStore.Save(metricType, metricName, metricValue)
+		newMetric, err := mhs.metricsStorage.Save(r.Context(), metric)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			var ewhs *storage.ErrorWithHTTPStatus
+			if errors.As(err, &ewhs) {
+				http.Error(w, ewhs.Error(), ewhs.HTTPStatus)
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
 			return
 		}
-		metricJSON, _ := json.Marshal(metric)
+		metricJSON, _ := json.Marshal(newMetric)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write(metricJSON)
 	}
 }
 
-func (mhs *metricsHandlerService) GetMetricHandler() func(http.ResponseWriter, *http.Request) {
+func (mhs *MetricsHandlerService) UpdateManyMetricsJSONHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var metricList []models.Metrics
+		var buf bytes.Buffer
+		_, err := buf.ReadFrom(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err = json.Unmarshal(buf.Bytes(), &metricList); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		newMetricsList, err := mhs.metricsStorage.SaveMany(r.Context(), metricList)
+		if err != nil {
+			var ewhs *storage.ErrorWithHTTPStatus
+			if errors.As(err, &ewhs) {
+				http.Error(w, ewhs.Error(), ewhs.HTTPStatus)
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+			return
+		}
+		metricsJSON, _ := json.Marshal(newMetricsList)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(metricsJSON)
+	}
+}
+
+func (mhs *MetricsHandlerService) GetMetricHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricName := chi.URLParam(r, "metricName")
 		metricType := chi.URLParam(r, "metricType")
 
-		if metricName == "" {
-			http.Error(w, "metric name is required", http.StatusNotFound)
-			return
-		}
-		metric := mhs.metricsStore.Get(metricType, metricName)
-		errorMessage := fmt.Sprintf("metric %s not found", metricName)
-		if metric == nil {
-			http.Error(w, errorMessage, http.StatusNotFound)
+		metric, err := mhs.metricsStorage.Get(r.Context(), metricName, metricType)
+		if err != nil {
+			var ewhs *storage.ErrorWithHTTPStatus
+			if errors.As(err, &ewhs) {
+				http.Error(w, ewhs.Error(), ewhs.HTTPStatus)
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
 			return
 		}
 		var value interface{}
 		switch metric.MType {
-		case storage.Counter:
+		case models.Counter:
 			value = *metric.Delta
-		case storage.Gauge:
+		case models.Gauge:
 			value = *metric.Value
 		}
 		metricStr := fmt.Sprintf("%v", value)
@@ -146,7 +162,7 @@ func (mhs *metricsHandlerService) GetMetricHandler() func(http.ResponseWriter, *
 	}
 }
 
-func (mhs *metricsHandlerService) GetMetricJSONHandler() func(http.ResponseWriter, *http.Request) {
+func (mhs *MetricsHandlerService) GetMetricJSONHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var newMetric models.Metrics
 		var buf bytes.Buffer
@@ -159,17 +175,16 @@ func (mhs *metricsHandlerService) GetMetricJSONHandler() func(http.ResponseWrite
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		metricType := newMetric.MType
 		metricName := newMetric.ID
-
-		if metricName == "" {
-			http.Error(w, "metric name is required", http.StatusNotFound)
-			return
-		}
-		metric := mhs.metricsStore.Get(metricType, metricName)
-		errorMessage := fmt.Sprintf("metric %s not found", metricName)
-		if metric == nil {
-			http.Error(w, errorMessage, http.StatusNotFound)
+		metricType := newMetric.MType
+		metric, err := mhs.metricsStorage.Get(r.Context(), metricName, metricType)
+		if err != nil {
+			var ewhs *storage.ErrorWithHTTPStatus
+			if errors.As(err, &ewhs) {
+				http.Error(w, ewhs.Error(), ewhs.HTTPStatus)
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
 			return
 		}
 		metricJSON, _ := json.Marshal(metric)
@@ -179,7 +194,7 @@ func (mhs *metricsHandlerService) GetMetricJSONHandler() func(http.ResponseWrite
 	}
 }
 
-func (mhs *metricsHandlerService) ShowMetricsSummaryHandler() func(http.ResponseWriter, *http.Request) {
+func (mhs *MetricsHandlerService) ShowMetricsSummaryHandler() func(http.ResponseWriter, *http.Request) {
 	fpath := filepath.Join("templates", "metrics_summary.html")
 	file, err := os.OpenFile(fpath, os.O_RDONLY, 0666)
 	if err != nil {
@@ -192,16 +207,40 @@ func (mhs *metricsHandlerService) ShowMetricsSummaryHandler() func(http.Response
 	metricsTemplate := string(temp)
 	tmpl := template.Must(template.New("metrics").Parse(metricsTemplate))
 	return func(w http.ResponseWriter, r *http.Request) {
-		metrics := mhs.metricsStore.GetAll()
+		metrics, err := mhs.metricsStorage.GetAll(r.Context())
+		if err != nil {
+			var ewhs *storage.ErrorWithHTTPStatus
+			if errors.As(err, &ewhs) {
+				http.Error(w, ewhs.Error(), ewhs.HTTPStatus)
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+			return
+		}
 		sort.Slice(metrics, func(i, j int) bool {
 			return metrics[i].ID < metrics[j].ID
 		})
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		err := tmpl.Execute(w, metrics)
+		err = tmpl.Execute(w, metrics)
 		if err != nil {
-			http.Error(w, "error rendering template", http.StatusInternalServerError)
+			http.Error(w, "Rendering template error", http.StatusInternalServerError)
 			return
 		}
+	}
+}
+
+func (mhs *MetricsHandlerService) PingHandler() func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := mhs.metricsStorage.Ping(r.Context()); err != nil {
+			var ewhs *storage.ErrorWithHTTPStatus
+			if errors.As(err, &ewhs) {
+				http.Error(w, ewhs.Error(), ewhs.HTTPStatus)
+			} else {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+			return
+		}
+		w.WriteHeader(http.StatusOK)
 	}
 }
