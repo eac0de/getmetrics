@@ -42,7 +42,7 @@ func (mems *memoryStorage) Save(ctx context.Context, metric models.Metrics) (*mo
 		if metric.Delta == nil {
 			return nil, NewErrorWithHTTPStatus(fmt.Errorf("metric %s with type %s must have filled delta", metric.ID, models.Counter), http.StatusBadRequest)
 		}
-		existMetric, err := mems.Get(ctx, metric.ID, metric.MType)
+		existMetric, err := mems.getMetric(metric.ID, metric.MType)
 		oldDelta := int64(0)
 		if err == nil {
 			oldDelta = *existMetric.Delta
@@ -77,29 +77,14 @@ func (mems *memoryStorage) SaveMany(ctx context.Context, metricsList []models.Me
 }
 
 func (mems *memoryStorage) Get(ctx context.Context, metricName string, metricType string) (*models.Metrics, error) {
-	var metric models.Metrics
-	switch metricType {
-	case models.Gauge:
-		value, ok := mems.MetricsMap.Gauge[metricName]
-		if !ok {
-			return nil, NewErrorWithHTTPStatus(fmt.Errorf("metric %s with type %s not found", metricName, metricType), http.StatusNotFound)
-		}
-		metric.Value = &value
-	case models.Counter:
-		delta, ok := mems.MetricsMap.Counter[metricName]
-		if !ok {
-			return nil, NewErrorWithHTTPStatus(fmt.Errorf("metric %s with type %s not found", metricName, metricType), http.StatusNotFound)
-		}
-		metric.Delta = &delta
-	default:
-		return nil, NewErrorWithHTTPStatus(fmt.Errorf("invalid type for %s: %s", metricName, metricType), http.StatusBadRequest)
-	}
-	metric.MType = metricType
-	metric.ID = metricName
-	return &metric, nil
+	mems.mu.Lock()
+	defer mems.mu.Unlock()
+	return mems.getMetric(metricName, metricType)
 }
 
 func (mems *memoryStorage) GetAll(ctx context.Context) ([]*models.Metrics, error) {
+	mems.mu.Lock()
+	defer mems.mu.Unlock()
 	var metrics []*models.Metrics
 	for name, value := range mems.MetricsMap.Gauge {
 		valueCopy := value
@@ -172,4 +157,27 @@ func (mems *memoryStorage) MergeMetricsList(metricsList []models.Metrics) ([]mod
 		mergeMetricsList = append(mergeMetricsList, models.Metrics{ID: ID, MType: models.Counter, Delta: &value})
 	}
 	return mergeMetricsList, nil
+}
+
+func (mems *memoryStorage) getMetric(metricName string, metricType string) (*models.Metrics, error) {
+	var metric models.Metrics
+	switch metricType {
+	case models.Gauge:
+		value, ok := mems.MetricsMap.Gauge[metricName]
+		if !ok {
+			return nil, NewErrorWithHTTPStatus(fmt.Errorf("metric %s with type %s not found", metricName, metricType), http.StatusNotFound)
+		}
+		metric.Value = &value
+	case models.Counter:
+		delta, ok := mems.MetricsMap.Counter[metricName]
+		if !ok {
+			return nil, NewErrorWithHTTPStatus(fmt.Errorf("metric %s with type %s not found", metricName, metricType), http.StatusNotFound)
+		}
+		metric.Delta = &delta
+	default:
+		return nil, NewErrorWithHTTPStatus(fmt.Errorf("invalid type for %s: %s", metricName, metricType), http.StatusBadRequest)
+	}
+	metric.MType = metricType
+	metric.ID = metricName
+	return &metric, nil
 }
