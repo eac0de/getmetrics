@@ -2,6 +2,9 @@ package agent
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -197,17 +200,24 @@ func (a *Agent) sendMetrics(metrics *Metrics) error {
 		return err
 	}
 	url := fmt.Sprintf("%s/updates/", a.conf.ServerURL)
-	resp, err := a.client.
+	request := a.client.
 		R().
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Content-Encoding", "gzip").
-		SetBody(metricGzip).
-		Post(url)
+		SetBody(metricGzip)
+	if a.conf.SecretKey != "" {
+		h := hmac.New(sha256.New, []byte(a.conf.SecretKey))
+		h.Write(metricGzip)
+		dst := h.Sum(nil)
+		signString := hex.EncodeToString(dst)
+		request.SetHeader("HashSHA256", signString)
+	}
+	resp, err := request.Post(url)
 	if err != nil {
 		return err
 	}
 	if resp.StatusCode() != http.StatusOK {
-		return fmt.Errorf("send metrics error: %s", resp.Body())
+		return fmt.Errorf("send metrics error: %s", string(resp.Body()))
 	}
 	return nil
 }

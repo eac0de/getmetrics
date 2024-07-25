@@ -10,13 +10,13 @@ type Router struct {
 	*chi.Mux
 }
 
-func NewRouter(handlerService *handlers.MetricsHandlerService) *Router {
+func NewRouter(handlerService *handlers.MetricsHandlerService, secretKey string) *Router {
 	mux := chi.NewRouter()
 	router := &Router{mux}
 	router.Use(middlewares.LoggerMiddleware)
+	router.Use(middlewares.GetCheckSignMiddleware(secretKey))
 	contentTypesForCompress := "application/json text/html"
 	router.Use(middlewares.GetGzipMiddleware(contentTypesForCompress))
-
 	router.Get("/", handlerService.ShowMetricsSummaryHandler())
 
 	router.Post("/update/{metricType}/{metricName}/{metricValue}", handlerService.UpdateMetricHandler())

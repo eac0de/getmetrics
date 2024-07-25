@@ -25,7 +25,7 @@ func NewMetrciServerApp(
 	logger.InitLogger(conf.LogLevel)
 	storage := storage.NewMetricsStorage(ctx, *conf)
 	metricsHandlerService := handlers.NewMetricsHandlerService(storage)
-	router := routers.NewRouter(metricsHandlerService)
+	router := routers.NewRouter(metricsHandlerService, conf.SecretKey)
 	return &MetrciServerApp{
 		conf:    conf,
 		storage: storage,
