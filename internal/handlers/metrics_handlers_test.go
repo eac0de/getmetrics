@@ -18,7 +18,7 @@ import (
 func TestUpdateMetricHandler(t *testing.T) {
 	type wantResp struct {
 		status  int
-		metrics models.MetricsMap
+		metrics models.MetricsDict
 	}
 	tests := []struct {
 		name    string
@@ -36,7 +36,7 @@ func TestUpdateMetricHandler(t *testing.T) {
 			}(),
 			want: wantResp{
 				status: 200,
-				metrics: models.MetricsMap{
+				metrics: models.MetricsDict{
 					Gauge:   map[string]float64{"test_name": 1},
 					Counter: map[string]int64{},
 				},
@@ -53,7 +53,7 @@ func TestUpdateMetricHandler(t *testing.T) {
 			}(),
 			want: wantResp{
 				status: 404,
-				metrics: models.MetricsMap{
+				metrics: models.MetricsDict{
 					Gauge:   map[string]float64{},
 					Counter: map[string]int64{},
 				},
@@ -70,7 +70,7 @@ func TestUpdateMetricHandler(t *testing.T) {
 			}(),
 			want: wantResp{
 				status: 400,
-				metrics: models.MetricsMap{
+				metrics: models.MetricsDict{
 					Gauge:   map[string]float64{},
 					Counter: map[string]int64{},
 				},
@@ -87,7 +87,7 @@ func TestUpdateMetricHandler(t *testing.T) {
 			}(),
 			want: wantResp{
 				status: 400,
-				metrics: models.MetricsMap{
+				metrics: models.MetricsDict{
 					Gauge:   map[string]float64{},
 					Counter: map[string]int64{},
 				},
@@ -106,7 +106,7 @@ func TestUpdateMetricHandler(t *testing.T) {
 			resp := w.Result()
 			defer resp.Body.Close()
 			assert.Equal(t, test.want.status, resp.StatusCode)
-			assert.Equal(t, test.want.metrics, metricsStorage.MetricsMap)
+			assert.Equal(t, test.want.metrics, metricsStorage.MetricsDict)
 		})
 	}
 }
@@ -114,7 +114,7 @@ func TestUpdateMetricHandler(t *testing.T) {
 func TestUpdateMetricJSONHandler(t *testing.T) {
 	type wantResp struct {
 		status  int
-		metrics models.MetricsMap
+		metrics models.MetricsDict
 	}
 	tests := []struct {
 		name   string
@@ -130,7 +130,7 @@ func TestUpdateMetricJSONHandler(t *testing.T) {
 			},
 			want: wantResp{
 				status: 200,
-				metrics: models.MetricsMap{
+				metrics: models.MetricsDict{
 					Gauge:   map[string]float64{"test_name": 1},
 					Counter: map[string]int64{},
 				},
@@ -145,7 +145,7 @@ func TestUpdateMetricJSONHandler(t *testing.T) {
 			},
 			want: wantResp{
 				status: 404,
-				metrics: models.MetricsMap{
+				metrics: models.MetricsDict{
 					Gauge:   map[string]float64{},
 					Counter: map[string]int64{},
 				},
@@ -160,7 +160,7 @@ func TestUpdateMetricJSONHandler(t *testing.T) {
 			},
 			want: wantResp{
 				status: 400,
-				metrics: models.MetricsMap{
+				metrics: models.MetricsDict{
 					Gauge:   map[string]float64{},
 					Counter: map[string]int64{},
 				},
@@ -174,7 +174,7 @@ func TestUpdateMetricJSONHandler(t *testing.T) {
 			},
 			want: wantResp{
 				status: 400,
-				metrics: models.MetricsMap{
+				metrics: models.MetricsDict{
 					Gauge:   map[string]float64{},
 					Counter: map[string]int64{},
 				},
@@ -197,7 +197,7 @@ func TestUpdateMetricJSONHandler(t *testing.T) {
 			resp := w.Result()
 			defer resp.Body.Close()
 			assert.Equal(t, test.want.status, resp.StatusCode)
-			assert.Equal(t, test.want.metrics, metricsStorage.MetricsMap)
+			assert.Equal(t, test.want.metrics, metricsStorage.MetricsDict)
 		})
 	}
 }

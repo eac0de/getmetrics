@@ -12,13 +12,13 @@ import (
 )
 
 type memoryStorage struct {
-	mu         sync.Mutex
-	MetricsMap models.MetricsMap
+	mu          sync.Mutex
+	MetricsDict models.MetricsDict
 }
 
 func NewMemoryStorage() *memoryStorage {
 	mems := memoryStorage{
-		MetricsMap: models.MetricsMap{
+		MetricsDict: models.MetricsDict{
 			Counter: map[string]int64{},
 			Gauge:   map[string]float64{},
 		},
@@ -37,7 +37,7 @@ func (mems *memoryStorage) Save(ctx context.Context, metric models.Metrics) (*mo
 		if metric.Value == nil {
 			return nil, NewErrorWithHTTPStatus(fmt.Errorf("metric %s with type %s must have filled value", metric.ID, models.Gauge), http.StatusBadRequest)
 		}
-		mems.MetricsMap.Gauge[metric.ID] = *metric.Value
+		mems.MetricsDict.Gauge[metric.ID] = *metric.Value
 	case models.Counter:
 		if metric.Delta == nil {
 			return nil, NewErrorWithHTTPStatus(fmt.Errorf("metric %s with type %s must have filled delta", metric.ID, models.Counter), http.StatusBadRequest)
@@ -47,7 +47,7 @@ func (mems *memoryStorage) Save(ctx context.Context, metric models.Metrics) (*mo
 		if err == nil {
 			oldDelta = *existMetric.Delta
 		}
-		mems.MetricsMap.Counter[metric.ID] = *metric.Delta + oldDelta
+		mems.MetricsDict.Counter[metric.ID] = *metric.Delta + oldDelta
 	default:
 		return nil, NewErrorWithHTTPStatus(fmt.Errorf("invalid metric type for %s: %s", metric.ID, metric.MType), http.StatusBadRequest)
 	}
@@ -86,7 +86,7 @@ func (mems *memoryStorage) GetAll(ctx context.Context) ([]*models.Metrics, error
 	mems.mu.Lock()
 	defer mems.mu.Unlock()
 	var metrics []*models.Metrics
-	for name, value := range mems.MetricsMap.Gauge {
+	for name, value := range mems.MetricsDict.Gauge {
 		valueCopy := value
 		metric := models.Metrics{
 			ID:    name,
@@ -95,7 +95,7 @@ func (mems *memoryStorage) GetAll(ctx context.Context) ([]*models.Metrics, error
 		}
 		metrics = append(metrics, &metric)
 	}
-	for name, value := range mems.MetricsMap.Counter {
+	for name, value := range mems.MetricsDict.Counter {
 		valueCopy := value
 		metric := models.Metrics{
 			ID:    name,
@@ -117,7 +117,7 @@ func (mems *memoryStorage) Ping(ctx context.Context) error {
 }
 
 func (mems *memoryStorage) MergeMetricsList(metricsList []models.Metrics) ([]models.Metrics, error) {
-	metricsMap := models.MetricsMap{
+	metricsMap := models.MetricsDict{
 		Gauge:   map[string]float64{},
 		Counter: map[string]int64{},
 	}
@@ -163,13 +163,13 @@ func (mems *memoryStorage) getMetric(metricName string, metricType string) (*mod
 	var metric models.Metrics
 	switch metricType {
 	case models.Gauge:
-		value, ok := mems.MetricsMap.Gauge[metricName]
+		value, ok := mems.MetricsDict.Gauge[metricName]
 		if !ok {
 			return nil, NewErrorWithHTTPStatus(fmt.Errorf("metric %s with type %s not found", metricName, metricType), http.StatusNotFound)
 		}
 		metric.Value = &value
 	case models.Counter:
-		delta, ok := mems.MetricsMap.Counter[metricName]
+		delta, ok := mems.MetricsDict.Counter[metricName]
 		if !ok {
 			return nil, NewErrorWithHTTPStatus(fmt.Errorf("metric %s with type %s not found", metricName, metricType), http.StatusNotFound)
 		}

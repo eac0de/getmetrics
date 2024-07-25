@@ -11,13 +11,13 @@ import (
 
 const EmptyFilename = ""
 
-type fileStorage struct {
+type FileStorage struct {
 	*memoryStorage
 	Filename     string
 	SaveInterval time.Duration
 }
 
-func NewFileStorage(ctx context.Context, filename string, saveInterval time.Duration) (*fileStorage, error) {
+func NewFileStorage(ctx context.Context, filename string, saveInterval time.Duration) (*FileStorage, error) {
 	if filename == EmptyFilename {
 		return nil, fmt.Errorf("filename cannot be an empty string")
 	}
@@ -26,7 +26,7 @@ func NewFileStorage(ctx context.Context, filename string, saveInterval time.Dura
 		return nil, err
 	}
 	memoryStorage := NewMemoryStorage()
-	fs := fileStorage{
+	fs := FileStorage{
 		memoryStorage: memoryStorage,
 		Filename:      filename,
 		SaveInterval:  saveInterval,
@@ -39,7 +39,7 @@ func NewFileStorage(ctx context.Context, filename string, saveInterval time.Dura
 	return &fs, nil
 }
 
-func (fs *fileStorage) LoadMetrics() error {
+func (fs *FileStorage) LoadMetrics() error {
 	f, err := os.OpenFile(fs.Filename, os.O_CREATE|os.O_RDONLY, 0666)
 	if err != nil {
 		return err
@@ -56,19 +56,19 @@ func (fs *fileStorage) LoadMetrics() error {
 		return nil
 	}
 	decoder := json.NewDecoder(f)
-	if err := decoder.Decode(&fs.MetricsMap); err != nil {
+	if err := decoder.Decode(&fs.MetricsDict); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (fs *fileStorage) SaveMetrics() error {
+func (fs *FileStorage) SaveMetrics() error {
 	f, err := os.OpenFile(fs.Filename, os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	data, err := json.MarshalIndent(fs.MetricsMap, "", "    ")
+	data, err := json.MarshalIndent(fs.MetricsDict, "", "    ")
 	if err != nil {
 		return err
 	}
@@ -80,7 +80,7 @@ func (fs *fileStorage) SaveMetrics() error {
 	return nil
 }
 
-func (fs *fileStorage) StartSavingMetrics(ctx context.Context) {
+func (fs *FileStorage) StartSavingMetrics(ctx context.Context) {
 	ticker := time.NewTicker(fs.SaveInterval)
 	for {
 		select {
@@ -98,7 +98,7 @@ func (fs *fileStorage) StartSavingMetrics(ctx context.Context) {
 
 }
 
-func (fs *fileStorage) Close() error {
+func (fs *FileStorage) Close() error {
 	err := fs.SaveMetrics()
 	if err != nil {
 		return err

@@ -14,10 +14,11 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	serverConfig := config.NewHTTPServerConfig()
-	s := server.NewMetricsService(ctx, serverConfig)
+	s := server.NewMetrciServerApp(ctx, serverConfig)
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT)
 	go s.Run()
+	go s.Stop(ctx)
 	<-sigChan
-	s.Stop(cancel)
+
 }
