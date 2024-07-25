@@ -134,7 +134,7 @@ func (dbs *databaseStorage) SaveBySQLModel(ctx context.Context, sql database.SQL
 }
 
 func (dbs *databaseStorage) MergeMetricsList(metricsList []models.Metrics) ([]models.Metrics, error) {
-	metricsMap := models.MetricsMap{
+	metricsMap := models.MetricsDict{
 		Gauge:   map[string]float64{},
 		Counter: map[string]int64{},
 	}

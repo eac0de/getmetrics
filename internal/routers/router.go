@@ -2,7 +2,6 @@ package routers
 
 import (
 	"github.com/eac0de/getmetrics/internal/handlers"
-	"github.com/eac0de/getmetrics/internal/storage"
 	"github.com/eac0de/getmetrics/pkg/middlewares"
 	"github.com/go-chi/chi/v5"
 )
@@ -11,28 +10,22 @@ type Router struct {
 	*chi.Mux
 }
 
-func NewRouter() *Router {
+func NewRouter(handlerService *handlers.MetricsHandlerService) *Router {
 	mux := chi.NewRouter()
 	router := &Router{mux}
-	return router
-}
-
-func (r *Router) AddMiddlewares() {
-	r.Use(middlewares.LoggerMiddleware)
+	router.Use(middlewares.LoggerMiddleware)
 	contentTypesForCompress := "application/json text/html"
-	r.Use(middlewares.GetGzipMiddleware(contentTypesForCompress))
-}
+	router.Use(middlewares.GetGzipMiddleware(contentTypesForCompress))
 
-func (r *Router) RegisterMetricsHandlers(storage storage.MetricsStorer) {
-	handlerService := handlers.NewMetricsHandlerService(storage)
-	r.Get("/", handlerService.ShowMetricsSummaryHandler())
+	router.Get("/", handlerService.ShowMetricsSummaryHandler())
 
-	r.Post("/update/{metricType}/{metricName}/{metricValue}", handlerService.UpdateMetricHandler())
-	r.Post("/update/", handlerService.UpdateMetricJSONHandler())
-	r.Post("/updates/", handlerService.UpdateManyMetricsJSONHandler())
+	router.Post("/update/{metricType}/{metricName}/{metricValue}", handlerService.UpdateMetricHandler())
+	router.Post("/update/", handlerService.UpdateMetricJSONHandler())
+	router.Post("/updates/", handlerService.UpdateManyMetricsJSONHandler())
 
-	r.Get("/value/{metricType}/{metricName}", handlerService.GetMetricHandler())
-	r.Post("/value/", handlerService.GetMetricJSONHandler())
+	router.Get("/value/{metricType}/{metricName}", handlerService.GetMetricHandler())
+	router.Post("/value/", handlerService.GetMetricJSONHandler())
 
-	r.Get("/ping", handlerService.PingHandler())
+	router.Get("/ping", handlerService.PingHandler())
+	return router
 }

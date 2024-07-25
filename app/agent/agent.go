@@ -31,8 +31,8 @@ func NewAgent(conf *config.AgentConfig) *Agent {
 	}
 }
 
-func (a *Agent) Stop(cancel context.CancelFunc) {
-	cancel()
+func (a *Agent) Stop(ctx context.Context) {
+	<-ctx.Done()
 	log.Println("Agent stopped")
 }
 
@@ -146,7 +146,7 @@ func (a *Agent) collectMetrics() *Metrics {
 }
 
 func (a *Agent) sendMetrics(metrics *Metrics) error {
-	values := models.MetricsMap{
+	values := models.MetricsDict{
 		Gauge: map[string]float64{
 			"Alloc":         metrics.Alloc,
 			"BuckHashSys":   metrics.BuckHashSys,
