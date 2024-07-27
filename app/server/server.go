@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"sync"
 
 	"github.com/eac0de/getmetrics/internal/config"
 	"github.com/eac0de/getmetrics/internal/handlers"
@@ -33,7 +34,8 @@ func NewMetrciServerApp(
 	}
 }
 
-func (s *MetrciServerApp) Stop(ctx context.Context) {
+func (s *MetrciServerApp) Stop(ctx context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
 	<-ctx.Done()
 	if s.storage != nil {
 		s.storage.Close()
@@ -47,4 +49,5 @@ func (s *MetrciServerApp) Run() {
 	if err != nil {
 		logger.Log.Fatal(err.Error())
 	}
+
 }
