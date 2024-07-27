@@ -73,4 +73,5 @@ func (c *AgentConfig) ReadEnvConfig() {
 	c.ServerURL = envConfig.ServerURL
 	c.PollInterval = time.Duration(envConfig.PollInterval) * time.Second
 	c.ReportInterval = time.Duration(envConfig.ReportInterval) * time.Second
+	c.SecretKey = envConfig.SecretKey
 }

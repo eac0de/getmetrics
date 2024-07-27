@@ -76,4 +76,5 @@ func (c *HTTPServerConfig) ReadEnvConfig() {
 	c.Restore = envConfig.Restore
 	c.StoreInterval = time.Duration(envConfig.StoreInterval) * time.Second
 	c.DatabaseDSN = envConfig.DatabaseDSN
+	c.SecretKey = envConfig.SecretKey
 }
