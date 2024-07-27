@@ -2,9 +2,6 @@ package agent
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -15,6 +12,7 @@ import (
 	"github.com/eac0de/getmetrics/internal/config"
 	"github.com/eac0de/getmetrics/internal/models"
 	"github.com/eac0de/getmetrics/pkg/compressor"
+	"github.com/eac0de/getmetrics/pkg/hasher"
 	"github.com/go-resty/resty/v2"
 )
 
@@ -205,12 +203,9 @@ func (a *Agent) sendMetrics(metrics *Metrics) error {
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Content-Encoding", "gzip").
 		SetBody(metricGzip)
-	if a.conf.SecretKey != "" {
-		h := hmac.New(sha256.New, []byte(a.conf.SecretKey))
-		h.Write(metricGzip)
-		dst := h.Sum(nil)
-		signString := hex.EncodeToString(dst)
-		request.SetHeader("HashSHA256", signString)
+	hash := hasher.HashSumToString(metricGzip, a.conf.SecretKey)
+	if hash != "" {
+		request.SetHeader("HashSHA256", hash)
 	}
 	resp, err := request.Post(url)
 	if err != nil {
