@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"runtime"
-	"sync"
 	"time"
 
 	"github.com/eac0de/getmetrics/internal/config"
@@ -32,9 +31,7 @@ func NewAgent(conf *config.AgentConfig) *Agent {
 	}
 }
 
-func (a *Agent) Stop(ctx context.Context, wg *sync.WaitGroup) {
-	defer wg.Done()
-	<-ctx.Done()
+func (a *Agent) Stop() {
 	log.Println("Agent stopped")
 }
 
