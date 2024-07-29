@@ -16,6 +16,7 @@ type (
 		PollInterval   time.Duration `yaml:"poll_interval"`
 		ReportInterval time.Duration `yaml:"report_interval"`
 		SecretKey      string        `env:"KEY"`
+		RateLimit      int           `yaml:"rate_limit"`
 	}
 
 	EnvAgentConfig struct {
@@ -51,6 +52,7 @@ func (c *AgentConfig) ReadServerFlags() {
 	flag.IntVar(&pollInterval, "p", pollInterval, "report interval in seconds")
 	flag.IntVar(&reportInterval, "r", reportInterval, "poll interval in seconds")
 	flag.StringVar(&c.SecretKey, "k", c.SecretKey, "secret key")
+	flag.IntVar(&c.RateLimit, "l", c.RateLimit, "rate limit")
 	flag.Parse()
 	c.PollInterval = time.Duration(pollInterval) * time.Second
 	c.ReportInterval = time.Duration(reportInterval) * time.Second
