@@ -15,16 +15,19 @@ import (
 
 	"github.com/eac0de/getmetrics/internal/models"
 	"github.com/eac0de/getmetrics/internal/storage"
+	"github.com/eac0de/getmetrics/pkg/hasher"
 	"github.com/go-chi/chi/v5"
 )
 
 type MetricsHandlerService struct {
 	metricsStorage storage.MetricsStorer
+	key            string
 }
 
-func NewMetricsHandlerService(ms storage.MetricsStorer) *MetricsHandlerService {
+func NewMetricsHandlerService(ms storage.MetricsStorer, key string) *MetricsHandlerService {
 	return &MetricsHandlerService{
 		metricsStorage: ms,
+		key:            key,
 	}
 }
 
@@ -66,10 +69,16 @@ func (mhs *MetricsHandlerService) UpdateMetricHandler() func(http.ResponseWriter
 			}
 			return
 		}
+
 		metricStr := fmt.Sprintf("%v", value)
+		data := []byte(metricStr)
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		hash := hasher.HashSumToString(data, mhs.key)
+		if hash != "" {
+			w.Header().Set("HashSHA256", hash)
+		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(metricStr))
+		w.Write(data)
 	}
 }
 
@@ -98,6 +107,10 @@ func (mhs *MetricsHandlerService) UpdateMetricJSONHandler() func(http.ResponseWr
 		}
 		metricJSON, _ := json.Marshal(newMetric)
 		w.Header().Set("Content-Type", "application/json")
+		hash := hasher.HashSumToString(metricJSON, mhs.key)
+		if hash != "" {
+			w.Header().Set("HashSHA256", hash)
+		}
 		w.WriteHeader(http.StatusOK)
 		w.Write(metricJSON)
 	}
@@ -128,6 +141,10 @@ func (mhs *MetricsHandlerService) UpdateManyMetricsJSONHandler() func(http.Respo
 		}
 		metricsJSON, _ := json.Marshal(newMetricsList)
 		w.Header().Set("Content-Type", "application/json")
+		hash := hasher.HashSumToString(metricsJSON, mhs.key)
+		if hash != "" {
+			w.Header().Set("HashSHA256", hash)
+		}
 		w.WriteHeader(http.StatusOK)
 		w.Write(metricsJSON)
 	}
@@ -156,9 +173,14 @@ func (mhs *MetricsHandlerService) GetMetricHandler() func(http.ResponseWriter, *
 			value = *metric.Value
 		}
 		metricStr := fmt.Sprintf("%v", value)
+		data := []byte(metricStr)
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		hash := hasher.HashSumToString(data, mhs.key)
+		if hash != "" {
+			w.Header().Set("HashSHA256", hash)
+		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(metricStr))
+		w.Write(data)
 	}
 }
 
@@ -189,6 +211,10 @@ func (mhs *MetricsHandlerService) GetMetricJSONHandler() func(http.ResponseWrite
 		}
 		metricJSON, _ := json.Marshal(metric)
 		w.Header().Set("Content-Type", "application/json")
+		hash := hasher.HashSumToString(metricJSON, mhs.key)
+		if hash != "" {
+			w.Header().Set("HashSHA256", hash)
+		}
 		w.WriteHeader(http.StatusOK)
 		w.Write(metricJSON)
 	}

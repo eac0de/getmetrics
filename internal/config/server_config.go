@@ -17,6 +17,7 @@ type HTTPServerConfig struct {
 	FileStoragePath string        `env:"FILE_STORAGE_PATH" yaml:"file_storage_path"`
 	Restore         bool          `env:"RESTORE" yaml:"restore"`
 	DatabaseDSN     string        `env:"DATABASE_DSN" yaml:"database_dsn"`
+	SecretKey       string        `env:"KEY"`
 }
 
 type EnvHTTPServerConfig struct {
@@ -51,6 +52,7 @@ func (c *HTTPServerConfig) ReadServerFlags() {
 	flag.StringVar(&c.FileStoragePath, "f", c.FileStoragePath, "server file restore path")
 	flag.BoolVar(&c.Restore, "r", c.Restore, "server restore")
 	flag.StringVar(&c.DatabaseDSN, "d", c.DatabaseDSN, "db address")
+	flag.StringVar(&c.SecretKey, "k", c.SecretKey, "secret key")
 	flag.Parse()
 	c.StoreInterval = time.Duration(storeInterval) * time.Second
 
@@ -74,4 +76,5 @@ func (c *HTTPServerConfig) ReadEnvConfig() {
 	c.Restore = envConfig.Restore
 	c.StoreInterval = time.Duration(envConfig.StoreInterval) * time.Second
 	c.DatabaseDSN = envConfig.DatabaseDSN
+	c.SecretKey = envConfig.SecretKey
 }
