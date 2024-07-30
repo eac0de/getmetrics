@@ -18,7 +18,6 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT)
 	go s.Run()
-	go s.Stop(ctx)
 	<-sigChan
-
+	s.Stop()
 }

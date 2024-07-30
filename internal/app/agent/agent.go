@@ -38,8 +38,7 @@ func NewAgent(conf *config.AgentConfig) *Agent {
 	}
 }
 
-func (a *Agent) Stop(ctx context.Context) {
-	<-ctx.Done()
+func (a *Agent) Stop() {
 	log.Println("Agent stopped")
 }
 

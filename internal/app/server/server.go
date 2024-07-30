@@ -33,8 +33,7 @@ func NewMetrciServerApp(
 	}
 }
 
-func (s *MetrciServerApp) Stop(ctx context.Context) {
-	<-ctx.Done()
+func (s *MetrciServerApp) Stop() {
 	if s.storage != nil {
 		s.storage.Close()
 	}
