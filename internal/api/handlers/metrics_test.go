@@ -239,7 +239,7 @@ func TestUpdateMetricJSONHandler(t *testing.T) {
 	}
 }
 
-func ExampleUpdateMetricHandler() {
+func ExampleMetricsHandlers_UpdateMetricHandler() {
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("metricType", models.Counter)
 	rctx.URLParams.Add("metricName", "test_name")
@@ -260,6 +260,7 @@ func ExampleUpdateMetricHandler() {
 	mh.UpdateMetricHandler()(rr, req)
 
 	res := rr.Result()
+	defer res.Body.Close()
 	fmt.Println(res.StatusCode)
 
 	body, _ := io.ReadAll(res.Body)
@@ -270,7 +271,7 @@ func ExampleUpdateMetricHandler() {
 	// 6
 }
 
-func ExampleGetMetricHandler() {
+func ExampleMetricsHandlers_GetMetricHandler() {
 	metricName := "test_name"
 	metricType := models.Counter
 	rctx := chi.NewRouteContext()
@@ -294,6 +295,7 @@ func ExampleGetMetricHandler() {
 	mh.GetMetricHandler()(rr, req)
 
 	res := rr.Result()
+	defer res.Body.Close()
 	fmt.Println(res.StatusCode)
 
 	body, _ := io.ReadAll(res.Body)
