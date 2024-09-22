@@ -28,7 +28,7 @@ type (
 
 func NewAgentConfig() *AgentConfig {
 	config := new(AgentConfig)
-	config.ReadYAML("local_config.yml")
+	config.ReadYAML("configs/local.yml")
 	config.ReadServerFlags()
 	config.ReadEnvConfig()
 	return config

@@ -24,7 +24,7 @@ import (
 type Agent struct {
 	conf       *config.AgentConfig
 	client     *resty.Client
-	metrics    *Metrics
+	metrics    *Metric
 	addMetrics *AddMetrics
 	pollCount  int64
 }
@@ -36,21 +36,6 @@ func NewAgent(conf *config.AgentConfig) *Agent {
 		conf:   conf,
 		client: client,
 	}
-}
-
-func (a *Agent) Stop() {
-	log.Println("Agent stopped")
-}
-
-func (a *Agent) Run(ctx context.Context) {
-
-	go a.StartPoll(ctx)
-	go a.StartPoll2(ctx)
-	sph := semaphore.NewSemaphore(a.conf.RateLimit)
-	go a.StartSendReport(ctx, sph)
-	go a.StartSendReport2(ctx, sph)
-	log.Println("Agent is running. Press Ctrl+C to stop")
-	<-ctx.Done() // Блокируемся до закрытия канала done
 }
 
 func (a *Agent) StartPoll(ctx context.Context) {
@@ -92,7 +77,7 @@ func (a *Agent) StartSendReport(ctx context.Context, sph *semaphore.Semaphore) {
 			if err != nil {
 				log.Printf("Not a single attempt has been successful, attempts count: %v\n", attempts)
 			} else {
-				log.Printf("The metrics send successfully, attempts count: %v\n", attempts)
+				log.Printf("Metrics send successfully, attempts count: %v\n", attempts)
 			}
 			sph.Release()
 		}
@@ -111,14 +96,14 @@ func (a *Agent) StartSendReport2(ctx context.Context, sph *semaphore.Semaphore) 
 			if err != nil {
 				log.Printf("Not a single attempt has been successful, attempts count: %v\n", attempts)
 			} else {
-				log.Printf("The add metrics send successfully, attempts count: %v\n", attempts)
+				log.Printf("AddMetrics send successfully, attempts count: %v\n", attempts)
 			}
 			sph.Release()
 		}
 	}
 }
 
-type Metrics struct {
+type Metric struct {
 	Alloc         float64 `json:"alloc"`
 	BuckHashSys   float64 `json:"buck_hash_sys"`
 	Frees         float64 `json:"frees"`
@@ -156,11 +141,11 @@ type AddMetrics struct {
 	CPUutilization1 float64 `json:"cpu_utilization1"`
 }
 
-func (a *Agent) collectMetrics() *Metrics {
+func (a *Agent) collectMetrics() *Metric {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 	a.pollCount++
-	return &Metrics{
+	return &Metric{
 		Alloc:         float64(memStats.Alloc),
 		BuckHashSys:   float64(memStats.BuckHashSys),
 		Frees:         float64(memStats.Frees),
@@ -203,8 +188,8 @@ func (a *Agent) collectAddMetrics() *AddMetrics {
 	}
 }
 
-func (a *Agent) sendMetrics(metrics *Metrics) error {
-	values := models.MetricsDict{
+func (a *Agent) sendMetrics(metrics *Metric) error {
+	values := models.MetricsData{
 		Gauge: map[string]float64{
 			"Alloc":         metrics.Alloc,
 			"BuckHashSys":   metrics.BuckHashSys,
@@ -239,12 +224,12 @@ func (a *Agent) sendMetrics(metrics *Metrics) error {
 			"PollCount": metrics.PollCount,
 		},
 	}
-	metricsList := []models.Metrics{}
+	metricsList := []models.Metric{}
 	for metricName, metricValue := range values.Gauge {
-		metricsList = append(metricsList, models.Metrics{ID: metricName, MType: models.Gauge, Value: &metricValue})
+		metricsList = append(metricsList, models.Metric{ID: metricName, MType: models.Gauge, Value: &metricValue})
 	}
 	for metricName, metricDelta := range values.Counter {
-		metricsList = append(metricsList, models.Metrics{ID: metricName, MType: models.Counter, Delta: &metricDelta})
+		metricsList = append(metricsList, models.Metric{ID: metricName, MType: models.Counter, Delta: &metricDelta})
 	}
 	metricsListJSON, err := json.Marshal(metricsList)
 	if err != nil {
@@ -278,16 +263,16 @@ func (a *Agent) sendMetrics(metrics *Metrics) error {
 }
 
 func (a *Agent) sendMetrics2(metrics *AddMetrics) error {
-	values := models.MetricsDict{
+	values := models.MetricsData{
 		Gauge: map[string]float64{
 			"TotalMemory":     metrics.TotalMemory,
 			"FreeMemory":      metrics.FreeMemory,
 			"CPUutilization1": metrics.CPUutilization1,
 		},
 	}
-	metricsList := []models.Metrics{}
+	metricsList := []models.Metric{}
 	for metricName, metricValue := range values.Gauge {
-		metricsList = append(metricsList, models.Metrics{ID: metricName, MType: models.Gauge, Value: &metricValue})
+		metricsList = append(metricsList, models.Metric{ID: metricName, MType: models.Gauge, Value: &metricValue})
 	}
 	metricsListJSON, err := json.Marshal(metricsList)
 	if err != nil {
@@ -320,7 +305,7 @@ func (a *Agent) sendMetrics2(metrics *AddMetrics) error {
 	return nil
 }
 
-func SendMetricsWithRetry(sendMetricsFunc func(*Metrics) error, metrics *Metrics) (uint8, error) {
+func SendMetricsWithRetry(sendMetricsFunc func(*Metric) error, metrics *Metric) (uint8, error) {
 	var err error
 	var attemtsCount uint8
 	for waitTime := 1; waitTime <= 5; waitTime += 2 {

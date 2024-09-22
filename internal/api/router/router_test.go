@@ -1,4 +1,4 @@
-package handlers
+package router
 
 import (
 	"bytes"
@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/eac0de/getmetrics/internal/models"
-	"github.com/eac0de/getmetrics/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 )
@@ -18,7 +17,7 @@ import (
 func TestUpdateMetricHandler(t *testing.T) {
 	type wantResp struct {
 		status  int
-		metrics models.MetricsDict
+		metrics models.MetricsData
 	}
 	tests := []struct {
 		name    string
@@ -36,7 +35,7 @@ func TestUpdateMetricHandler(t *testing.T) {
 			}(),
 			want: wantResp{
 				status: 200,
-				metrics: models.MetricsDict{
+				metrics: models.MetricsData{
 					Gauge:   map[string]float64{"test_name": 1},
 					Counter: map[string]int64{},
 				},
@@ -53,7 +52,7 @@ func TestUpdateMetricHandler(t *testing.T) {
 			}(),
 			want: wantResp{
 				status: 404,
-				metrics: models.MetricsDict{
+				metrics: models.MetricsData{
 					Gauge:   map[string]float64{},
 					Counter: map[string]int64{},
 				},
@@ -70,7 +69,7 @@ func TestUpdateMetricHandler(t *testing.T) {
 			}(),
 			want: wantResp{
 				status: 400,
-				metrics: models.MetricsDict{
+				metrics: models.MetricsData{
 					Gauge:   map[string]float64{},
 					Counter: map[string]int64{},
 				},
@@ -87,7 +86,7 @@ func TestUpdateMetricHandler(t *testing.T) {
 			}(),
 			want: wantResp{
 				status: 400,
-				metrics: models.MetricsDict{
+				metrics: models.MetricsData{
 					Gauge:   map[string]float64{},
 					Counter: map[string]int64{},
 				},
@@ -101,12 +100,12 @@ func TestUpdateMetricHandler(t *testing.T) {
 			r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, test.context))
 			w := httptest.NewRecorder()
 			metricsStorage := storage.NewMemoryStorage()
-			mhs := NewMetricsHandlerService(metricsStorage, "")
+			mhs := New()
 			mhs.UpdateMetricHandler()(w, r)
 			resp := w.Result()
 			defer resp.Body.Close()
 			assert.Equal(t, test.want.status, resp.StatusCode)
-			assert.Equal(t, test.want.metrics, metricsStorage.MetricsDict)
+			assert.Equal(t, test.want.metrics, metricsStorage.MetricsData)
 		})
 	}
 }
@@ -114,23 +113,23 @@ func TestUpdateMetricHandler(t *testing.T) {
 func TestUpdateMetricJSONHandler(t *testing.T) {
 	type wantResp struct {
 		status  int
-		metrics models.MetricsDict
+		metrics models.MetricsData
 	}
 	tests := []struct {
 		name   string
-		metric models.Metrics
+		metric models.Metric
 		want   wantResp
 	}{
 		{
 			name: "status 200",
-			metric: models.Metrics{
+			metric: models.Metric{
 				ID:    "test_name",
 				MType: "gauge",
 				Value: func(v float64) *float64 { return &v }(1),
 			},
 			want: wantResp{
 				status: 200,
-				metrics: models.MetricsDict{
+				metrics: models.MetricsData{
 					Gauge:   map[string]float64{"test_name": 1},
 					Counter: map[string]int64{},
 				},
@@ -139,13 +138,13 @@ func TestUpdateMetricJSONHandler(t *testing.T) {
 
 		{
 			name: "status 404",
-			metric: models.Metrics{
+			metric: models.Metric{
 				MType: "gauge",
 				Value: func(v float64) *float64 { return &v }(1),
 			},
 			want: wantResp{
 				status: 404,
-				metrics: models.MetricsDict{
+				metrics: models.MetricsData{
 					Gauge:   map[string]float64{},
 					Counter: map[string]int64{},
 				},
@@ -153,14 +152,14 @@ func TestUpdateMetricJSONHandler(t *testing.T) {
 		},
 		{
 			name: "status 400 with invalid_type",
-			metric: models.Metrics{
+			metric: models.Metric{
 				ID:    "test_name",
 				MType: "counter",
 				Value: func(v float64) *float64 { return &v }(1),
 			},
 			want: wantResp{
 				status: 400,
-				metrics: models.MetricsDict{
+				metrics: models.MetricsData{
 					Gauge:   map[string]float64{},
 					Counter: map[string]int64{},
 				},
@@ -168,13 +167,13 @@ func TestUpdateMetricJSONHandler(t *testing.T) {
 		},
 		{
 			name: "status 400 with invalid_value",
-			metric: models.Metrics{
+			metric: models.Metric{
 				ID:    "test_name",
 				MType: "gauge",
 			},
 			want: wantResp{
 				status: 400,
-				metrics: models.MetricsDict{
+				metrics: models.MetricsData{
 					Gauge:   map[string]float64{},
 					Counter: map[string]int64{},
 				},
@@ -192,12 +191,12 @@ func TestUpdateMetricJSONHandler(t *testing.T) {
 			r := httptest.NewRequest(http.MethodPost, url, &buf)
 			w := httptest.NewRecorder()
 			metricsStorage := storage.NewMemoryStorage()
-			mhs := NewMetricsHandlerService(metricsStorage, "")
+			mhs := New(metricsStorage, "")
 			mhs.UpdateMetricJSONHandler()(w, r)
 			resp := w.Result()
 			defer resp.Body.Close()
 			assert.Equal(t, test.want.status, resp.StatusCode)
-			assert.Equal(t, test.want.metrics, metricsStorage.MetricsDict)
+			assert.Equal(t, test.want.metrics, metricsStorage.MetricsData)
 		})
 	}
 }

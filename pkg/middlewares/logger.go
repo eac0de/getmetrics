@@ -1,11 +1,9 @@
 package middlewares
 
 import (
+	"log"
 	"net/http"
 	"time"
-
-	"github.com/eac0de/getmetrics/internal/logger"
-	"go.uber.org/zap"
 )
 
 type (
@@ -13,7 +11,6 @@ type (
 		size   int
 		status int
 	}
-
 	logResponseWriter struct {
 		responseData *responseData
 		http.ResponseWriter
@@ -28,12 +25,10 @@ func (lw *logResponseWriter) Write(body []byte) (int, error) {
 	lw.responseData.size += size
 	return size, err
 }
-
 func (lw *logResponseWriter) WriteHeader(statusCode int) {
 	lw.ResponseWriter.WriteHeader(statusCode)
 	lw.responseData.status = statusCode
 }
-
 func LoggerMiddleware(h http.Handler) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		var (
@@ -44,13 +39,7 @@ func LoggerMiddleware(h http.Handler) http.Handler {
 		start := time.Now()
 		h.ServeHTTP(&lw, r)
 		duration = time.Since(start)
-		logger.Log.Info("HTTP request",
-			zap.String("URI", r.URL.Path),
-			zap.String("method", r.Method),
-			zap.Duration("duration", duration),
-			zap.Int("statusCode", lw.responseData.status),
-			zap.Int("size", lw.responseData.size),
-		)
+		log.Printf("%s %v %s %s %v bytes", r.Method, lw.responseData.status, r.URL.Path, duration, lw.responseData.size)
 	}
 	return http.HandlerFunc(fn)
 }
