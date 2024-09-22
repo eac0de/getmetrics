@@ -1,4 +1,4 @@
-package router
+package handlers
 
 import (
 	"context"
@@ -17,13 +17,8 @@ import (
 	"github.com/eac0de/getmetrics/internal/models"
 	"github.com/eac0de/getmetrics/pkg/errors"
 	"github.com/eac0de/getmetrics/pkg/hasher"
-	"github.com/eac0de/getmetrics/pkg/middlewares"
 	"github.com/go-chi/chi/v5"
 )
-
-type IDatabase interface {
-	PingContext(ctx context.Context) error
-}
 
 type IMetricsStore interface {
 	SaveMetric(ctx context.Context, metric models.Metric) error
@@ -32,41 +27,27 @@ type IMetricsStore interface {
 	ListAllMetrics(ctx context.Context) ([]*models.Metric, error)
 }
 
-type Router struct {
-	chi.Router
+type MetricsHandlers struct {
 	MetricsStore IMetricsStore
-	Database     IDatabase
 	SecretKey    string
 }
 
-func New(metricsStore IMetricsStore, database IDatabase, secretKey string) *Router {
-	r := &Router{
-		Router:       chi.NewRouter(),
-		MetricsStore: metricsStore,
-		Database:     database,
+func NewMetricsHandlers(metricStore IMetricsStore, secretKey string) *MetricsHandlers {
+	return &MetricsHandlers{
+		MetricsStore: metricStore,
 		SecretKey:    secretKey,
 	}
-
-	r.Use(middlewares.LoggerMiddleware)
-	r.Use(middlewares.GetCheckSignMiddleware(secretKey))
-	contentTypesForCompress := "application/json text/html"
-	r.Use(middlewares.GetGzipMiddleware(contentTypesForCompress))
-	r.Get("/", r.ShowMetricsSummaryHandler())
-	r.Post("/update/{metricType}/{metricName}/{metricValue}", r.UpdateMetricHandler())
-	r.Post("/update/", r.UpdateMetricJSONHandler())
-	r.Post("/updates/", r.UpdateMetricsJSONHandler())
-
-	r.Get("/value/{metricType}/{metricName}", r.GetMetricHandler())
-	r.Post("/value/", r.GetMetricJSONHandler())
-	r.Get("/ping", r.PingHandler())
-	return r
 }
 
-func (router *Router) UpdateMetricHandler() func(http.ResponseWriter, *http.Request) {
+func (h *MetricsHandlers) UpdateMetricHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricType := chi.URLParam(r, "metricType")
 		metricName := chi.URLParam(r, "metricName")
 		metricValue := chi.URLParam(r, "metricValue")
+		if metricName == "" {
+			http.Error(w, "metric name is required", http.StatusNotFound)
+			return
+		}
 		metric := models.Metric{
 			ID:    metricName,
 			MType: metricType,
@@ -74,49 +55,73 @@ func (router *Router) UpdateMetricHandler() func(http.ResponseWriter, *http.Requ
 		switch metric.MType {
 		case models.Counter:
 			delta, err := strconv.ParseInt(metricValue, 10, 64)
-			if err != nil {
-				http.Error(w, "Invalid value for counter metric", http.StatusBadRequest)
-				return
+			if err == nil {
+				metric.Delta = &delta
 			}
-			metric.Delta = &delta
 		case models.Gauge:
 			value, err := strconv.ParseFloat(metricValue, 64)
-			if err != nil {
-				http.Error(w, "Invalid value for gauge metric", http.StatusBadRequest)
-				return
+			if err == nil {
+				metric.Value = &value
 			}
-			metric.Value = &value
-		default:
-			http.Error(w, "Invalid metric type", http.StatusBadRequest)
+		}
+		err := h.validateMetric(metric)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		err := router.MetricsStore.SaveMetric(r.Context(), metric)
+		if metric.MType == models.Counter {
+			oldDelta, err := h.getOldDelta(r.Context(), metric.ID)
+			if err != nil {
+				msg, statusCode := errors.GetMessageAndStatusCode(err)
+				http.Error(w, msg, statusCode)
+				return
+			}
+			fmt.Println(oldDelta)
+			*metric.Delta += oldDelta
+		}
+		err = h.MetricsStore.SaveMetric(r.Context(), metric)
 		if err != nil {
 			msg, statusCode := errors.GetMessageAndStatusCode(err)
 			http.Error(w, msg, statusCode)
 			return
 		}
-		data := []byte(metricValue)
+		var answer string
+		switch metric.MType {
+		case models.Counter:
+			answer = fmt.Sprintf("%v", *metric.Delta)
+		case models.Gauge:
+			answer = fmt.Sprintf("%v", *metric.Value)
+		}
+		data := []byte(answer)
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		router.addSign(w, data)
+		h.addSign(w, data)
 		w.WriteHeader(http.StatusOK)
 		w.Write(data)
 	}
 }
 
-func (router *Router) UpdateMetricJSONHandler() func(http.ResponseWriter, *http.Request) {
+func (h *MetricsHandlers) UpdateMetricJSONHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var metric models.Metric
 		if err := json.NewDecoder(r.Body).Decode(&metric); err != nil {
 			http.Error(w, "Invalid request payload", http.StatusBadRequest)
 			return
 		}
-		err := models.ValidateMetric(metric)
+		err := h.validateMetric(metric)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		err = router.MetricsStore.SaveMetric(r.Context(), metric)
+		if metric.MType == models.Counter {
+			oldDelta, err := h.getOldDelta(r.Context(), metric.ID)
+			if err != nil {
+				msg, statusCode := errors.GetMessageAndStatusCode(err)
+				http.Error(w, msg, statusCode)
+				return
+			}
+			*metric.Delta += oldDelta
+		}
+		err = h.MetricsStore.SaveMetric(r.Context(), metric)
 		if err != nil {
 			msg, statusCode := errors.GetMessageAndStatusCode(err)
 			http.Error(w, msg, statusCode)
@@ -128,13 +133,13 @@ func (router *Router) UpdateMetricJSONHandler() func(http.ResponseWriter, *http.
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		router.addSign(w, data)
+		h.addSign(w, data)
 		w.WriteHeader(http.StatusOK)
 		w.Write(data)
 	}
 }
 
-func (router *Router) UpdateMetricsJSONHandler() func(http.ResponseWriter, *http.Request) {
+func (h *MetricsHandlers) UpdateMetricsJSONHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var metricsList []models.Metric
 		if err := json.NewDecoder(r.Body).Decode(&metricsList); err != nil {
@@ -143,7 +148,7 @@ func (router *Router) UpdateMetricsJSONHandler() func(http.ResponseWriter, *http
 		}
 		var errsList []error
 		for _, metric := range metricsList {
-			err := models.ValidateMetric(metric)
+			err := h.validateMetric(metric)
 			if err != nil {
 				errsList = append(errsList, err)
 			}
@@ -153,8 +158,13 @@ func (router *Router) UpdateMetricsJSONHandler() func(http.ResponseWriter, *http
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		metricsList = models.MergeMetricsList(metricsList)
-		err := router.MetricsStore.SaveMetrics(r.Context(), metricsList)
+		metricsList, err := h.mergeMetricsList(r.Context(), metricsList)
+		if err != nil {
+			msg, statusCode := errors.GetMessageAndStatusCode(err)
+			http.Error(w, msg, statusCode)
+			return
+		}
+		err = h.MetricsStore.SaveMetrics(r.Context(), metricsList)
 		if err != nil {
 			msg, statusCode := errors.GetMessageAndStatusCode(err)
 			http.Error(w, msg, statusCode)
@@ -167,18 +177,18 @@ func (router *Router) UpdateMetricsJSONHandler() func(http.ResponseWriter, *http
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		router.addSign(w, data)
+		h.addSign(w, data)
 		w.WriteHeader(http.StatusOK)
 		w.Write(data)
 	}
 }
 
-func (router *Router) GetMetricHandler() func(http.ResponseWriter, *http.Request) {
+func (h *MetricsHandlers) GetMetricHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricName := chi.URLParam(r, "metricName")
 		metricType := chi.URLParam(r, "metricType")
 
-		metric, err := router.MetricsStore.GetMetric(r.Context(), metricName, metricType)
+		metric, err := h.MetricsStore.GetMetric(r.Context(), metricName, metricType)
 		if err != nil {
 			msg, statusCode := errors.GetMessageAndStatusCode(err)
 			http.Error(w, msg, statusCode)
@@ -193,20 +203,20 @@ func (router *Router) GetMetricHandler() func(http.ResponseWriter, *http.Request
 		}
 		data := []byte(metricStr)
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		router.addSign(w, data)
+		h.addSign(w, data)
 		w.WriteHeader(http.StatusOK)
 		w.Write(data)
 	}
 }
 
-func (router *Router) GetMetricJSONHandler() func(http.ResponseWriter, *http.Request) {
+func (h *MetricsHandlers) GetMetricJSONHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var metric *models.Metric
 		if err := json.NewDecoder(r.Body).Decode(metric); err != nil {
 			http.Error(w, "Invalid request payload", http.StatusBadRequest)
 			return
 		}
-		metric, err := router.MetricsStore.GetMetric(r.Context(), metric.ID, metric.MType)
+		metric, err := h.MetricsStore.GetMetric(r.Context(), metric.ID, metric.MType)
 		if err != nil {
 			msg, statusCode := errors.GetMessageAndStatusCode(err)
 			http.Error(w, msg, statusCode)
@@ -218,28 +228,28 @@ func (router *Router) GetMetricJSONHandler() func(http.ResponseWriter, *http.Req
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		router.addSign(w, data)
+		h.addSign(w, data)
 		w.WriteHeader(http.StatusOK)
 		w.Write(data)
 	}
 }
 
-func (router *Router) ShowMetricsSummaryHandler() func(http.ResponseWriter, *http.Request) {
+func (h *MetricsHandlers) ShowMetricsSummaryHandler() func(http.ResponseWriter, *http.Request) {
 	filePath := filepath.Join("templates", "metrics_summary.html")
 	file, err := os.OpenFile(filePath, os.O_RDONLY, 0666)
 	if err != nil {
-		log.Fatal("open template file error: %s", err.Error())
+		log.Fatalf("open template file error: %s", err.Error())
 	}
 	data, err := io.ReadAll(file)
 	if err != nil {
-		log.Fatal("read template error: %s", err.Error())
+		log.Fatalf("read template error: %s", err.Error())
 	}
 	tmpl, err := template.New("metrics").Parse(string(data))
 	if err != nil {
-		log.Fatal("parse template error: %s", err.Error())
+		log.Fatalf("parse template error: %s", err.Error())
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		metrics, err := router.MetricsStore.ListAllMetrics(r.Context())
+		metrics, err := h.MetricsStore.ListAllMetrics(r.Context())
 		if err != nil {
 			msg, statusCode := errors.GetMessageAndStatusCode(err)
 			http.Error(w, msg, statusCode)
@@ -258,25 +268,79 @@ func (router *Router) ShowMetricsSummaryHandler() func(http.ResponseWriter, *htt
 	}
 }
 
-func (router *Router) PingHandler() func(http.ResponseWriter, *http.Request) {
-	if router.Database == nil {
-		return func(w http.ResponseWriter, r *http.Request) {
-			http.Error(w, "Database not init", http.StatusInternalServerError)
+func (h *MetricsHandlers) getOldDelta(ctx context.Context, ID string) (int64, error) {
+	var oldDelta int64
+	metric, err := h.MetricsStore.GetMetric(ctx, ID, models.Counter)
+	if err != nil {
+		_, statusCode := errors.GetMessageAndStatusCode(err)
+		if statusCode != http.StatusNotFound {
+			return 0, err
 		}
+	} else {
+		oldDelta = *metric.Delta
 	}
-	return func(w http.ResponseWriter, r *http.Request) {
-		if err := router.Database.PingContext(r.Context()); err != nil {
-			msg, statusCode := errors.GetMessageAndStatusCode(err)
-			http.Error(w, msg, statusCode)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}
+	return oldDelta, nil
 }
 
-func (router *Router) addSign(w http.ResponseWriter, data []byte) {
-	hash := hasher.HashSumToString(data, router.SecretKey)
+func (h *MetricsHandlers) addSign(w http.ResponseWriter, data []byte) {
+	hash := hasher.HashSumToString(data, h.SecretKey)
 	if hash != "" {
 		w.Header().Set("HashSHA256", hash)
 	}
+}
+
+func (h *MetricsHandlers) validateMetric(metric models.Metric) error {
+	if metric.ID == "" {
+		return fmt.Errorf("metric name is required")
+	}
+	switch metric.MType {
+	case models.Gauge:
+		if metric.Value == nil {
+			return fmt.Errorf("metric %s with type %s must have filled value", metric.ID, metric.MType)
+		}
+	case models.Counter:
+		if metric.Delta == nil {
+			return fmt.Errorf("metric %s with type %s must have filled delta", metric.ID, metric.MType)
+		}
+	default:
+		return fmt.Errorf("invalid metric type for %s: %s", metric.ID, metric.MType)
+	}
+	return nil
+}
+
+func (h *MetricsHandlers) mergeMetricsList(ctx context.Context, metricsList []models.Metric) ([]models.Metric, error) {
+	metricsMap := models.MetricsData{
+		Gauge:   map[string]float64{},
+		Counter: map[string]int64{},
+	}
+
+	// Обработка метрик
+	for _, metric := range metricsList {
+		switch metric.MType {
+		case models.Gauge:
+			metricsMap.Gauge[metric.ID] = *metric.Value
+		case models.Counter:
+			metricsMap.Counter[metric.ID] += *metric.Delta
+		}
+	}
+
+	// Формируем результирующий список
+	mergeMetricsList := make([]models.Metric, 0, len(metricsMap.Gauge)+len(metricsMap.Counter))
+
+	// Добавляем все gauge метрики
+	for ID, value := range metricsMap.Gauge {
+		mergeMetricsList = append(mergeMetricsList, models.Metric{ID: ID, MType: models.Gauge, Value: &value})
+	}
+
+	// Добавляем все counter метрики
+	for ID, value := range metricsMap.Counter {
+		oldDelta, err := h.getOldDelta(ctx, ID)
+		if err != nil {
+			return nil, err
+		}
+		value += oldDelta
+		mergeMetricsList = append(mergeMetricsList, models.Metric{ID: ID, MType: models.Counter, Delta: &value})
+	}
+
+	return mergeMetricsList, nil
 }

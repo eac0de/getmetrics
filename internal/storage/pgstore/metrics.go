@@ -11,17 +11,6 @@ import (
 )
 
 func (store *PostgresqlStore) SaveMetric(ctx context.Context, metric models.Metric) error {
-	if metric.MType == models.Counter {
-		var delta int64
-		query := "SELECT delta FROM metrics WHERE type=$1 AND id=$2"
-		err := store.GetContext(ctx, &delta, query, metric.MType, metric.ID)
-		if err != nil {
-			if !stderr.Is(err, sql.ErrNoRows) {
-				return err
-			}
-		}
-		*metric.Delta = delta + *metric.Delta
-	}
 	query := `
 	INSERT INTO metrics (id, type, delta, value)
 	VALUES ($1, $2, $3, $4)
@@ -48,18 +37,6 @@ func (store *PostgresqlStore) SaveMetrics(ctx context.Context, metricsList []mod
 	DO UPDATE SET delta = $3, value = $4
 	`
 	for _, metric := range metricsList {
-		if metric.MType == models.Counter {
-			var delta int64
-			query := "SELECT delta FROM metrics WHERE type=$1 AND id=$2"
-			err := store.GetContext(ctx, &delta, query, metric.MType, metric.ID)
-			if err != nil {
-				if !stderr.Is(err, sql.ErrNoRows) {
-					errsList = append(errsList, err)
-					continue
-				}
-			}
-			*metric.Delta = delta + *metric.Delta
-		}
 		_, err = tx.ExecContext(ctx, query, metric.ID, metric.MType, metric.Delta, metric.Value)
 		if err != nil {
 			errsList = append(errsList, err)

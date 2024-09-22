@@ -16,7 +16,7 @@ func (store *MemoryStore) SaveMetric(ctx context.Context, metric models.Metric) 
 	case models.Gauge:
 		store.MetricsData.Gauge[metric.ID] = *metric.Value
 	case models.Counter:
-		store.MetricsData.Counter[metric.ID] += *metric.Delta
+		store.MetricsData.Counter[metric.ID] = *metric.Delta
 	}
 	return nil
 }
