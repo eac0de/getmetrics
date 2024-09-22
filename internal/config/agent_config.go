@@ -15,6 +15,8 @@ type (
 		ServerURL      string        `env:"ADDRESS" yaml:"addr"`
 		PollInterval   time.Duration `yaml:"poll_interval"`
 		ReportInterval time.Duration `yaml:"report_interval"`
+		SecretKey      string        `env:"KEY"`
+		RateLimit      int           `yaml:"rate_limit"`
 	}
 
 	EnvAgentConfig struct {
@@ -26,7 +28,7 @@ type (
 
 func NewAgentConfig() *AgentConfig {
 	config := new(AgentConfig)
-	config.ReadYAML("local_config.yml")
+	config.ReadYAML("configs/local.yml")
 	config.ReadServerFlags()
 	config.ReadEnvConfig()
 	return config
@@ -49,6 +51,8 @@ func (c *AgentConfig) ReadServerFlags() {
 	flag.StringVar(&c.ServerURL, "a", c.ServerURL, "server address")
 	flag.IntVar(&pollInterval, "p", pollInterval, "report interval in seconds")
 	flag.IntVar(&reportInterval, "r", reportInterval, "poll interval in seconds")
+	flag.StringVar(&c.SecretKey, "k", c.SecretKey, "secret key")
+	flag.IntVar(&c.RateLimit, "l", c.RateLimit, "rate limit")
 	flag.Parse()
 	c.PollInterval = time.Duration(pollInterval) * time.Second
 	c.ReportInterval = time.Duration(reportInterval) * time.Second
@@ -71,4 +75,5 @@ func (c *AgentConfig) ReadEnvConfig() {
 	c.ServerURL = envConfig.ServerURL
 	c.PollInterval = time.Duration(envConfig.PollInterval) * time.Second
 	c.ReportInterval = time.Duration(envConfig.ReportInterval) * time.Second
+	c.SecretKey = envConfig.SecretKey
 }

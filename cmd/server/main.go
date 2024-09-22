@@ -2,22 +2,81 @@ package main
 
 import (
 	"context"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"github.com/eac0de/getmetrics/app/server"
+	"github.com/eac0de/getmetrics/internal/api/handlers"
+	"github.com/eac0de/getmetrics/internal/api/server"
 	"github.com/eac0de/getmetrics/internal/config"
+	"github.com/eac0de/getmetrics/internal/storage/fileservice"
+	"github.com/eac0de/getmetrics/internal/storage/memstore"
+	"github.com/eac0de/getmetrics/internal/storage/pgstore"
+	"github.com/eac0de/getmetrics/pkg/middlewares"
+	"github.com/go-chi/chi/v5"
 )
+
+func setupRouter(
+	metricsStore handlers.IMetricsStore,
+	database handlers.IDatabase,
+	secretKey string,
+) *chi.Mux {
+	mh := handlers.NewMetricsHandlers(metricsStore, secretKey)
+	dh := handlers.NewDatabaseHandlers(database)
+
+	r := chi.NewRouter()
+	r.Use(middlewares.LoggerMiddleware)
+	r.Use(middlewares.GetCheckSignMiddleware(secretKey))
+	contentTypesForCompress := "application/json text/html"
+	r.Use(middlewares.GetGzipMiddleware(contentTypesForCompress))
+
+	r.Get("/", mh.ShowMetricsSummaryHandler())
+	r.Post("/update/{metricType}/{metricName}/{metricValue}", mh.UpdateMetricHandler())
+	r.Post("/update/", mh.UpdateMetricJSONHandler())
+	r.Post("/updates/", mh.UpdateMetricsJSONHandler())
+	r.Get("/value/{metricType}/{metricName}", mh.GetMetricHandler())
+	r.Post("/value/", mh.GetMetricJSONHandler())
+
+	r.Get("/ping", dh.PingHandler())
+	return r
+}
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	serverConfig := config.NewHTTPServerConfig()
-	s := server.NewMetrciServerApp(ctx, serverConfig)
+
+	cfg, err := config.LoadAppConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+	var metricStore handlers.IMetricsStore
+	var database handlers.IDatabase
+
+	pgStore, err := pgstore.New(ctx, cfg.DatabaseDSN)
+	if err != nil {
+		log.Printf("database connection error: %s\n", err.Error())
+		memStore := memstore.New()
+		metricStore = memStore
+		fileService, err := fileservice.New(memStore, cfg.FileStoragePath)
+		if err != nil {
+			log.Printf("fileservice init error: %s\n", err.Error())
+		} else {
+			go fileService.StartSavingMetrics(ctx, cfg.StoreInterval)
+			defer fileService.SaveMetrics()
+		}
+	} else {
+		metricStore = pgStore
+		database = pgStore
+		defer pgStore.Close()
+	}
+
+	r := setupRouter(metricStore, database, cfg.SecretKey)
+	s := server.New(cfg.Addr)
+	go s.Run(r)
+	log.Printf("Server http://%s is running. Press Ctrl+C to stop", s.Addr)
+
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT)
-	go s.Run()
 	<-sigChan
-	s.Stop()
 }
