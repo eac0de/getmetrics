@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -236,4 +237,69 @@ func TestUpdateMetricJSONHandler(t *testing.T) {
 			}
 		})
 	}
+}
+
+func ExampleUpdateMetricHandler() {
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("metricType", models.Counter)
+	rctx.URLParams.Add("metricName", "test_name")
+	rctx.URLParams.Add("metricValue", "1")
+
+	req, _ := http.NewRequest(http.MethodPost, "/update/{metricType}/{metricName}/{metricValue}", nil)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	rr := httptest.NewRecorder()
+
+	ctrl := gomock.NewController(nil)
+	defer ctrl.Finish()
+	metricsStore := mocks.NewMockIMetricsStore(ctrl)
+	metricsStore.EXPECT().SaveMetric(gomock.Any(), gomock.Any()).Return(nil)
+	delta := int64(5)
+	metricsStore.EXPECT().GetMetric(gomock.Any(), gomock.Any(), gomock.Any()).Return(&models.Metric{Delta: &delta}, nil)
+	mh := NewMetricsHandlers(metricsStore, "")
+
+	mh.UpdateMetricHandler()(rr, req)
+
+	res := rr.Result()
+	fmt.Println(res.StatusCode)
+
+	body, _ := io.ReadAll(res.Body)
+	fmt.Println(string(body))
+
+	// Output:
+	// 200
+	// 6
+}
+
+func ExampleGetMetricHandler() {
+	metricName := "test_name"
+	metricType := models.Counter
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("metricType", metricType)
+	rctx.URLParams.Add("metricName", metricName)
+	req, _ := http.NewRequest(http.MethodGet, "/value/{metricType}/{metricName}", nil)
+	rr := httptest.NewRecorder()
+
+	ctrl := gomock.NewController(nil)
+	defer ctrl.Finish()
+	metricsStore := mocks.NewMockIMetricsStore(ctrl)
+	delta := int64(5)
+	metric := models.Metric{
+		ID:    metricName,
+		MType: metricType,
+		Delta: &delta,
+	}
+	metricsStore.EXPECT().GetMetric(gomock.Any(), gomock.Any(), gomock.Any()).Return(&metric, nil)
+	mh := NewMetricsHandlers(metricsStore, "")
+
+	mh.GetMetricHandler()(rr, req)
+
+	res := rr.Result()
+	fmt.Println(res.StatusCode)
+
+	body, _ := io.ReadAll(res.Body)
+	fmt.Println(string(body))
+
+	// Output:
+	// 200
+	// 5
 }
