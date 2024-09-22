@@ -37,9 +37,9 @@ func New(ctx context.Context, dataSourceName string) (*PostgresqlStore, error) {
 
 func (store *PostgresqlStore) Migrate(ctx context.Context) error {
 	migrationsDir := "./migrations"
-	if err := goose.ResetContext(ctx, store.DB.DB, migrationsDir); err != nil {
-		return err
-	}
+	// if err := goose.ResetContext(ctx, store.DB.DB, migrationsDir); err != nil {
+	// 	return err
+	// }
 	if err := goose.UpContext(ctx, store.DB.DB, migrationsDir); err != nil {
 		return err
 	}

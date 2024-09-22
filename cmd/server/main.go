@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+
+	_ "net/http/pprof"
 
 	"github.com/eac0de/getmetrics/internal/api/handlers"
 	"github.com/eac0de/getmetrics/internal/api/server"
@@ -73,6 +76,10 @@ func main() {
 
 	r := setupRouter(metricStore, database, cfg.SecretKey)
 	s := server.New(cfg.Addr)
+	go func() {
+		// Запускаем pprof на отдельном порту, если это необходимо
+		http.ListenAndServe(":6060", nil)
+	}()
 	go s.Run(r)
 	log.Printf("Server http://%s is running. Press Ctrl+C to stop", s.Addr)
 
