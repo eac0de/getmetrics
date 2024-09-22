@@ -1,11 +1,11 @@
 module github.com/eac0de/getmetrics
 
-go 1.23.1
+go 1.22.7
 
 require (
 	github.com/caarlos0/env/v6 v6.10.1
 	github.com/go-chi/chi/v5 v5.1.0
-	github.com/go-resty/resty/v2 v2.15.1
+	github.com/go-resty/resty/v2 v2.15.2
 	github.com/jackc/pgx/v5 v5.7.1
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/pressly/goose/v3 v3.22.1
