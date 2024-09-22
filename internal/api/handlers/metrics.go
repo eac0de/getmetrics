@@ -211,12 +211,12 @@ func (h *MetricsHandlers) GetMetricHandler() func(http.ResponseWriter, *http.Req
 
 func (h *MetricsHandlers) GetMetricJSONHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var metric *models.Metric
-		if err := json.NewDecoder(r.Body).Decode(metric); err != nil {
+		var m models.Metric
+		if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
 			http.Error(w, "Invalid request payload", http.StatusBadRequest)
 			return
 		}
-		metric, err := h.MetricsStore.GetMetric(r.Context(), metric.ID, metric.MType)
+		metric, err := h.MetricsStore.GetMetric(r.Context(), m.ID, m.MType)
 		if err != nil {
 			msg, statusCode := errors.GetMessageAndStatusCode(err)
 			http.Error(w, msg, statusCode)
