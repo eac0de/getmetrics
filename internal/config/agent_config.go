@@ -2,7 +2,6 @@ package config
 
 import (
 	"flag"
-	"log"
 	"os"
 	"time"
 
@@ -26,23 +25,30 @@ type (
 	}
 )
 
-func NewAgentConfig() *AgentConfig {
+func LoadAgentConfig() (*AgentConfig, error) {
 	config := new(AgentConfig)
-	config.ReadYAML("configs/local.yml")
+	err := config.ReadYAML("configs/local.yml")
+	if err != nil {
+		return nil, err
+	}
 	config.ReadServerFlags()
-	config.ReadEnvConfig()
-	return config
+	err = config.ReadEnvConfig()
+	if err != nil {
+		return nil, err
+	}
+	return config, nil
 }
 
-func (c *AgentConfig) ReadYAML(filename string) {
+func (c *AgentConfig) ReadYAML(filename string) error {
 	file, err := os.OpenFile(filename, os.O_RDONLY, 0666)
 	if err != nil {
-		log.Fatalf("read yaml error(1): %s", err.Error())
+		return err
 	}
 	err = yaml.NewDecoder(file).Decode(c)
 	if err != nil {
-		log.Fatalf("read yaml error(2): %s", err.Error())
+		return err
 	}
+	return nil
 }
 
 func (c *AgentConfig) ReadServerFlags() {
@@ -59,7 +65,7 @@ func (c *AgentConfig) ReadServerFlags() {
 
 }
 
-func (c *AgentConfig) ReadEnvConfig() {
+func (c *AgentConfig) ReadEnvConfig() error {
 	DurationToInt := func(d time.Duration) int {
 		return int(d.Seconds())
 	}
@@ -70,10 +76,11 @@ func (c *AgentConfig) ReadEnvConfig() {
 	}
 	err := env.Parse(&envConfig)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	c.ServerURL = envConfig.ServerURL
 	c.PollInterval = time.Duration(envConfig.PollInterval) * time.Second
 	c.ReportInterval = time.Duration(envConfig.ReportInterval) * time.Second
 	c.SecretKey = envConfig.SecretKey
+	return nil
 }

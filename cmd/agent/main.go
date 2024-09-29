@@ -9,7 +9,6 @@ import (
 
 	"github.com/eac0de/getmetrics/internal/agent"
 	"github.com/eac0de/getmetrics/internal/config"
-	"github.com/eac0de/getmetrics/pkg/semaphore"
 )
 
 func main() {
@@ -19,12 +18,7 @@ func main() {
 
 	a := agent.NewAgent(cfg)
 	go a.StartPoll(ctx)
-	go a.StartPoll2(ctx)
-
-	sph := semaphore.NewSemaphore(cfg.RateLimit)
-
-	go a.StartSendReport(ctx, sph)
-	go a.StartSendReport2(ctx, sph)
+	go a.StartSendReport(ctx)
 
 	log.Println("Agent is running. Press Ctrl+C to stop")
 

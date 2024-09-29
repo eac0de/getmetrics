@@ -2,7 +2,6 @@ package config
 
 import (
 	"flag"
-	"log"
 	"os"
 	"time"
 
@@ -42,11 +41,11 @@ func LoadAppConfig() (*AppConfig, error) {
 func (c *AppConfig) ReadYAML(filename string) error {
 	file, err := os.OpenFile(filename, os.O_RDONLY, 0666)
 	if err != nil {
-		log.Fatalf("read yaml error(1): %s", err.Error())
+		return err
 	}
 	err = yaml.NewDecoder(file).Decode(c)
 	if err != nil {
-		log.Fatalf("read yaml error(2): %s", err.Error())
+		return err
 	}
 	return nil
 }
