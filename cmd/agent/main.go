@@ -14,8 +14,10 @@ import (
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cfg := config.NewAgentConfig()
-
+	cfg, err := config.LoadAgentConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
 	a := agent.NewAgent(cfg)
 	go a.StartPoll(ctx)
 	go a.StartSendReport(ctx)
