@@ -24,7 +24,6 @@ func main() {
 
 	log.Println("Agent is running. Press Ctrl+C to stop")
 
-	<-ctx.Done() // Блокируемся до закрытия канала done
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT)
 	<-sigChan
