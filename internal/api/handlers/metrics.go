@@ -1,3 +1,14 @@
+// Package handlers предоставляет HTTP-обработчики для управления метриками.
+//
+// Этот пакет реализует функциональность для обновления, получения и отображения метрик.
+// Обработчики взаимодействуют с хранилищем метрик и поддерживают как текстовый, так и JSON форматы.
+// Пакет обеспечивает валидацию метрик и обработку ошибок, а также предоставляет возможность
+// отображения метрик в виде HTML-страницы.
+//
+// Основные функции пакета включают:
+// - Обновление метрик через параметры URL и JSON.
+// - Получение метрик в текстовом и JSON форматах.
+// - Отображение всех метрик на HTML-странице.
 package handlers
 
 import (
@@ -20,6 +31,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// IMetricsStore интерфейс для хранения метрик. Определяет методы для сохранения и получения метрик.
 type IMetricsStore interface {
 	SaveMetric(ctx context.Context, metric models.Metric) error
 	SaveMetrics(ctx context.Context, metricsList []models.Metric) error
@@ -27,11 +39,15 @@ type IMetricsStore interface {
 	ListAllMetrics(ctx context.Context) ([]*models.Metric, error)
 }
 
+// MetricsHandlers представляет набор обработчиков для работы с метриками.
 type MetricsHandlers struct {
-	MetricsStore IMetricsStore
-	SecretKey    string
+	MetricsStore IMetricsStore // Хранилище метрик
+	SecretKey    string        // Секретный ключ для генерации подписи
 }
 
+// NewMetricsHandlers создает новый экземпляр MetricsHandlers.
+//
+// Принимает на вход интерфейс хранилища метрик и секретный ключ.
 func NewMetricsHandlers(metricStore IMetricsStore, secretKey string) *MetricsHandlers {
 	return &MetricsHandlers{
 		MetricsStore: metricStore,
@@ -39,6 +55,9 @@ func NewMetricsHandlers(metricStore IMetricsStore, secretKey string) *MetricsHan
 	}
 }
 
+// UpdateMetricHandler возвращает HTTP-обработчик для обновления метрики по URL параметрам.
+//
+// Поддерживаются два типа метрик: counter и gauge. Обновляет значение метрики в хранилище.
 func (h *MetricsHandlers) UpdateMetricHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricType := chi.URLParam(r, "metricType")
@@ -76,7 +95,6 @@ func (h *MetricsHandlers) UpdateMetricHandler() func(http.ResponseWriter, *http.
 				http.Error(w, msg, statusCode)
 				return
 			}
-			fmt.Println(oldDelta)
 			*metric.Delta += oldDelta
 		}
 		err = h.MetricsStore.SaveMetric(r.Context(), metric)
@@ -100,6 +118,9 @@ func (h *MetricsHandlers) UpdateMetricHandler() func(http.ResponseWriter, *http.
 	}
 }
 
+// UpdateMetricJSONHandler возвращает HTTP-обработчик для обновления метрики через JSON-пост запрос.
+//
+// Обрабатывает JSON-запрос с метрикой и обновляет ее значение в хранилище.
 func (h *MetricsHandlers) UpdateMetricJSONHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var metric models.Metric
@@ -139,6 +160,9 @@ func (h *MetricsHandlers) UpdateMetricJSONHandler() func(http.ResponseWriter, *h
 	}
 }
 
+// UpdateMetricsJSONHandler возвращает HTTP-обработчик для массового обновления метрик через JSON.
+//
+// Обрабатывает список метрик, выполняет их валидацию и обновляет в хранилище.
 func (h *MetricsHandlers) UpdateMetricsJSONHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var metricsList []models.Metric
@@ -183,11 +207,13 @@ func (h *MetricsHandlers) UpdateMetricsJSONHandler() func(http.ResponseWriter, *
 	}
 }
 
+// GetMetricHandler возвращает HTTP-обработчик для получения метрики по имени и типу.
+//
+// Обрабатывает запрос для получения метрики и возвращает её значение в формате текста.
 func (h *MetricsHandlers) GetMetricHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metricName := chi.URLParam(r, "metricName")
 		metricType := chi.URLParam(r, "metricType")
-
 		metric, err := h.MetricsStore.GetMetric(r.Context(), metricName, metricType)
 		if err != nil {
 			msg, statusCode := errors.GetMessageAndStatusCode(err)
@@ -209,6 +235,9 @@ func (h *MetricsHandlers) GetMetricHandler() func(http.ResponseWriter, *http.Req
 	}
 }
 
+// GetMetricJSONHandler возвращает HTTP-обработчик для получения метрики через JSON.
+//
+// Получает метрику из хранилища и возвращает ее в формате JSON.
 func (h *MetricsHandlers) GetMetricJSONHandler() func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var m models.Metric
@@ -234,6 +263,9 @@ func (h *MetricsHandlers) GetMetricJSONHandler() func(http.ResponseWriter, *http
 	}
 }
 
+// ShowMetricsSummaryHandler возвращает HTTP-обработчик для отображения HTML-страницы со списком всех метрик.
+//
+// Загружает шаблон и отображает страницу со всеми метриками из хранилища.
 func (h *MetricsHandlers) ShowMetricsSummaryHandler() func(http.ResponseWriter, *http.Request) {
 	filePath := filepath.Join("templates", "metrics_summary.html")
 	file, err := os.OpenFile(filePath, os.O_RDONLY, 0666)

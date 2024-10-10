@@ -1,20 +1,28 @@
 package models
 
 const (
-	Gauge   = "gauge"
+	// Gauge обозначает тип метрики для значения типа "гейдж".
+	Gauge = "gauge"
+	// Counter обозначает тип метрики для значения типа "счетчик".
 	Counter = "counter"
 )
 
-type (
-	Metric struct {
-		ID    string   `json:"id" db:"id"`                 // имя метрики
-		MType string   `json:"type" db:"type"`             // параметр, принимающий значение gauge или counter
-		Delta *int64   `json:"delta,omitempty" db:"delta"` // значение метрики в случае передачи counter
-		Value *float64 `json:"value,omitempty" db:"value"` // значение метрики в случае передачи gauge
-	}
+// Metric представляет метрику с ее параметрами.
+type Metric struct {
+	// ID - имя метрики.
+	ID string `json:"id" db:"id"`
+	// MType - тип метрики, который может быть "gauge" или "counter".
+	MType string `json:"type" db:"type"`
+	// Delta - значение метрики в случае передачи счетчика (counter).
+	Delta *int64 `json:"delta,omitempty" db:"delta"`
+	// Value - значение метрики в случае передачи гейджа (gauge).
+	Value *float64 `json:"value,omitempty" db:"value"`
+}
 
-	MetricsData struct {
-		Counter map[string]int64   `json:"counter"`
-		Gauge   map[string]float64 `json:"gauge"`
-	}
-)
+// MetricsData хранит данные о метриках.
+type MetricsData struct {
+	// Counter - карта для хранения счетчиков.
+	Counter map[string]int64 `json:"counter"`
+	// Gauge - карта для хранения гейджа.
+	Gauge map[string]float64 `json:"gauge"`
+}

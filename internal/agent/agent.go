@@ -15,18 +15,14 @@ import (
 	"github.com/eac0de/getmetrics/internal/config"
 	"github.com/eac0de/getmetrics/internal/models"
 	"github.com/eac0de/getmetrics/pkg/compressor"
-	"github.com/eac0de/getmetrics/pkg/semaphore"
 	"github.com/go-resty/resty/v2"
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/mem"
 )
 
 type Agent struct {
-	conf       *config.AgentConfig
-	client     *resty.Client
-	metrics    *Metric
-	addMetrics *AddMetrics
-	pollCount  int64
+	conf      *config.AgentConfig
+	client    *resty.Client
+	metrics   *Metric
+	pollCount int64
 }
 
 func NewAgent(conf *config.AgentConfig) *Agent {
@@ -51,20 +47,7 @@ func (a *Agent) StartPoll(ctx context.Context) {
 	}
 }
 
-func (a *Agent) StartPoll2(ctx context.Context) {
-	ticker := time.NewTicker(a.conf.PollInterval)
-	for {
-		select {
-		case <-ctx.Done():
-			log.Println("Poll2 goroutine is shutting down...")
-			return
-		case <-ticker.C:
-			a.addMetrics = a.collectAddMetrics()
-		}
-	}
-}
-
-func (a *Agent) StartSendReport(ctx context.Context, sph *semaphore.Semaphore) {
+func (a *Agent) StartSendReport(ctx context.Context) {
 	ticker := time.NewTicker(a.conf.ReportInterval)
 	for {
 		select {
@@ -72,33 +55,7 @@ func (a *Agent) StartSendReport(ctx context.Context, sph *semaphore.Semaphore) {
 			log.Println("Goroutine sending reports has been shut down...")
 			return
 		case <-ticker.C:
-			sph.Acquire()
-			attempts, err := SendMetricsWithRetry(a.sendMetrics, a.metrics)
-			if err != nil {
-				log.Printf("Not a single attempt has been successful, attempts count: %v\n", attempts)
-			} else {
-				log.Printf("Metrics send successfully, attempts count: %v\n", attempts)
-			}
-			sph.Release()
-		}
-	}
-}
-func (a *Agent) StartSendReport2(ctx context.Context, sph *semaphore.Semaphore) {
-	ticker := time.NewTicker(a.conf.ReportInterval)
-	for {
-		select {
-		case <-ctx.Done():
-			log.Println("Goroutine sending reports has been shut down...")
-			return
-		case <-ticker.C:
-			sph.Acquire()
-			attempts, err := SendMetricsWithRetry2(a.sendMetrics2, a.addMetrics)
-			if err != nil {
-				log.Printf("Not a single attempt has been successful, attempts count: %v\n", attempts)
-			} else {
-				log.Printf("AddMetrics send successfully, attempts count: %v\n", attempts)
-			}
-			sph.Release()
+			a.sendMetrics(a.metrics)
 		}
 	}
 }
@@ -178,16 +135,6 @@ func (a *Agent) collectMetrics() *Metric {
 	}
 }
 
-func (a *Agent) collectAddMetrics() *AddMetrics {
-	virtualMem, _ := mem.VirtualMemory()
-	cpuUsage, _ := cpu.Percent(1*time.Second, true)
-	return &AddMetrics{
-		TotalMemory:     float64(virtualMem.Total) / (1024 * 1024 * 1024),
-		FreeMemory:      float64(virtualMem.Free) / (1024 * 1024 * 1024),
-		CPUutilization1: float64(cpuUsage[1]),
-	}
-}
-
 func (a *Agent) sendMetrics(metrics *Metric) error {
 	values := models.MetricsData{
 		Gauge: map[string]float64{
@@ -260,75 +207,4 @@ func (a *Agent) sendMetrics(metrics *Metric) error {
 		return fmt.Errorf("send metrics error: %s", string(resp.Body()))
 	}
 	return nil
-}
-
-func (a *Agent) sendMetrics2(metrics *AddMetrics) error {
-	values := models.MetricsData{
-		Gauge: map[string]float64{
-			"TotalMemory":     metrics.TotalMemory,
-			"FreeMemory":      metrics.FreeMemory,
-			"CPUutilization1": metrics.CPUutilization1,
-		},
-	}
-	metricsList := []models.Metric{}
-	for metricName, metricValue := range values.Gauge {
-		metricsList = append(metricsList, models.Metric{ID: metricName, MType: models.Gauge, Value: &metricValue})
-	}
-	metricsListJSON, err := json.Marshal(metricsList)
-	if err != nil {
-		return err
-	}
-	metricGzip, err := compressor.GzipData(metricsListJSON)
-	if err != nil {
-		return err
-	}
-	url := fmt.Sprintf("%s/updates/", a.conf.ServerURL)
-	request := a.client.
-		R().
-		SetHeader("Content-Type", "application/json").
-		SetHeader("Content-Encoding", "gzip").
-		SetBody(metricGzip)
-	if a.conf.SecretKey != "" {
-		h := hmac.New(sha256.New, []byte(a.conf.SecretKey))
-		h.Write(metricGzip)
-		dst := h.Sum(nil)
-		signString := hex.EncodeToString(dst)
-		request.SetHeader("HashSHA256", signString)
-	}
-	resp, err := request.Post(url)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode() != http.StatusOK {
-		return fmt.Errorf("send metrics error: %s", string(resp.Body()))
-	}
-	return nil
-}
-
-func SendMetricsWithRetry(sendMetricsFunc func(*Metric) error, metrics *Metric) (uint8, error) {
-	var err error
-	var attemtsCount uint8
-	for waitTime := 1; waitTime <= 5; waitTime += 2 {
-		attemtsCount += 1
-		err = sendMetricsFunc(metrics)
-		if err == nil {
-			return attemtsCount, nil
-		}
-		time.Sleep(time.Duration(waitTime) * time.Second)
-	}
-	return attemtsCount, err
-}
-
-func SendMetricsWithRetry2(sendMetricsFunc func(*AddMetrics) error, metrics *AddMetrics) (uint8, error) {
-	var err error
-	var attemtsCount uint8
-	for waitTime := 1; waitTime <= 5; waitTime += 2 {
-		attemtsCount += 1
-		err = sendMetricsFunc(metrics)
-		if err == nil {
-			return attemtsCount, nil
-		}
-		time.Sleep(time.Duration(waitTime) * time.Second)
-	}
-	return attemtsCount, err
 }
