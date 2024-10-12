@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -17,7 +18,14 @@ import (
 	"github.com/eac0de/getmetrics/internal/storage/memstore"
 	"github.com/eac0de/getmetrics/internal/storage/pgstore"
 	"github.com/eac0de/getmetrics/pkg/middlewares"
+	"github.com/eac0de/getmetrics/pkg/utils"
 	"github.com/go-chi/chi/v5"
+)
+
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
 )
 
 func setupRouter(
@@ -46,6 +54,10 @@ func setupRouter(
 }
 
 func main() {
+	fmt.Printf("Build version: %s\n", utils.GetValueOrDefault(buildVersion))
+	fmt.Printf("Build date: %s\n", utils.GetValueOrDefault(buildDate))
+	fmt.Printf("Build commit: %s\n", utils.GetValueOrDefault(buildCommit))
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
