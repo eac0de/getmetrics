@@ -89,7 +89,8 @@ func (h *MetricsHandlers) UpdateMetricHandler() func(http.ResponseWriter, *http.
 			return
 		}
 		if metric.MType == models.Counter {
-			oldDelta, err := h.getOldDelta(r.Context(), metric.ID)
+			var oldDelta int64
+			oldDelta, err = h.getOldDelta(r.Context(), metric.ID)
 			if err != nil {
 				msg, statusCode := errors.GetMessageAndStatusCode(err)
 				http.Error(w, msg, statusCode)
@@ -134,7 +135,8 @@ func (h *MetricsHandlers) UpdateMetricJSONHandler() func(http.ResponseWriter, *h
 			return
 		}
 		if metric.MType == models.Counter {
-			oldDelta, err := h.getOldDelta(r.Context(), metric.ID)
+			var oldDelta int64
+			oldDelta, err = h.getOldDelta(r.Context(), metric.ID)
 			if err != nil {
 				msg, statusCode := errors.GetMessageAndStatusCode(err)
 				http.Error(w, msg, statusCode)
