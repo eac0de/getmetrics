@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"flag"
 	"os"
 	"time"
@@ -32,6 +33,13 @@ func LoadAgentConfig() (*AgentConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+	configPath := getConfigPath()
+	if configPath != "" {
+		err := config.ReadJSON(configPath)
+		if err != nil {
+			return nil, err
+		}
+	}
 	config.ReadServerFlags()
 	err = config.ReadEnvConfig()
 	if err != nil {
@@ -46,6 +54,20 @@ func (c *AgentConfig) ReadYAML(filename string) error {
 		return err
 	}
 	err = yaml.NewDecoder(file).Decode(c)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *AgentConfig) ReadJSON(filename string) error {
+	file, err := os.OpenFile(filename, os.O_RDONLY, 0666)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	err = json.NewDecoder(file).Decode(c)
 	if err != nil {
 		return err
 	}

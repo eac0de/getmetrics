@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"flag"
 	"os"
 	"time"
@@ -31,6 +32,13 @@ func LoadAppConfig() (*AppConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+	configPath := getConfigPath()
+	if configPath != "" {
+		err := config.ReadJSON(configPath)
+		if err != nil {
+			return nil, err
+		}
+	}
 	config.ReadServerFlags()
 	err = config.ReadEnvConfig()
 	if err != nil {
@@ -39,12 +47,34 @@ func LoadAppConfig() (*AppConfig, error) {
 	return config, nil
 }
 
+func getConfigPath() string {
+	// Читаем путь к файлу конфигурации через флаг -c или переменную окружения CONFIG
+	var configPath string
+	flag.StringVar(&configPath, "config", os.Getenv("CONFIG"), "path to config file (JSON)")
+	flag.Parse()
+	return configPath
+}
+
 func (c *AppConfig) ReadYAML(filename string) error {
 	file, err := os.OpenFile(filename, os.O_RDONLY, 0666)
 	if err != nil {
 		return err
 	}
 	err = yaml.NewDecoder(file).Decode(c)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *AppConfig) ReadJSON(filename string) error {
+	file, err := os.OpenFile(filename, os.O_RDONLY, 0666)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	err = json.NewDecoder(file).Decode(c)
 	if err != nil {
 		return err
 	}

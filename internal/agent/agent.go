@@ -19,23 +19,27 @@ import (
 )
 
 type Agent struct {
-	conf      *config.AgentConfig
+	cfg       *config.AgentConfig
 	client    *resty.Client
 	metrics   *Metric
 	pollCount int64
 }
 
-func NewAgent(conf *config.AgentConfig) *Agent {
-	conf.ServerURL = "http://" + conf.ServerURL
+func NewAgent(cfg *config.AgentConfig) *Agent {
+	ServerURLProtocol := "http"
+	if cfg.PublicKeyPath != "" {
+		ServerURLProtocol = "https"
+	}
+	cfg.ServerURL = fmt.Sprintf("%s://%s", ServerURLProtocol, cfg.ServerURL)
 	client := resty.New()
 	return &Agent{
-		conf:   conf,
+		cfg:    cfg,
 		client: client,
 	}
 }
 
 func (a *Agent) StartPoll(ctx context.Context) {
-	ticker := time.NewTicker(a.conf.PollInterval)
+	ticker := time.NewTicker(a.cfg.PollInterval)
 	for {
 		select {
 		case <-ctx.Done():
@@ -48,7 +52,7 @@ func (a *Agent) StartPoll(ctx context.Context) {
 }
 
 func (a *Agent) StartSendReport(ctx context.Context) {
-	ticker := time.NewTicker(a.conf.ReportInterval)
+	ticker := time.NewTicker(a.cfg.ReportInterval)
 	for {
 		select {
 		case <-ctx.Done():
@@ -186,14 +190,14 @@ func (a *Agent) sendMetrics(metrics *Metric) error {
 	if err != nil {
 		return err
 	}
-	url := fmt.Sprintf("%s/updates/", a.conf.ServerURL)
+	url := fmt.Sprintf("%s/updates/", a.cfg.ServerURL)
 	request := a.client.
 		R().
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Content-Encoding", "gzip").
 		SetBody(metricGzip)
-	if a.conf.SecretKey != "" {
-		h := hmac.New(sha256.New, []byte(a.conf.SecretKey))
+	if a.cfg.SecretKey != "" {
+		h := hmac.New(sha256.New, []byte(a.cfg.SecretKey))
 		h.Write(metricGzip)
 		dst := h.Sum(nil)
 		signString := hex.EncodeToString(dst)
