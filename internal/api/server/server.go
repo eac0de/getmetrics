@@ -8,15 +8,16 @@ import (
 )
 
 type Server struct {
-	Addr string
+	Addr           string
+	PrivateKeyPath string
 }
 
-func New(addr string) *Server {
-	return &Server{Addr: addr}
+func New(addr string, privateKeyPath string) *Server {
+	return &Server{Addr: addr, PrivateKeyPath: privateKeyPath}
 }
 
 func (s *Server) Run(router chi.Router) {
-	err := http.ListenAndServe(s.Addr, router)
+	err := http.ListenAndServeTLS(s.Addr, "server.crt", s.PrivateKeyPath, router)
 	if err != nil {
 		log.Fatal(err.Error())
 	}

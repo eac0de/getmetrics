@@ -87,13 +87,13 @@ func main() {
 	}
 
 	r := setupRouter(metricStore, database, cfg.SecretKey)
-	s := server.New(cfg.Addr)
+	s := server.New(cfg.Addr, cfg.PrivateKeyPath)
 	go func() {
 		// Запускаем pprof на отдельном порту, если это необходимо
 		http.ListenAndServe(":6060", nil)
 	}()
 	go s.Run(r)
-	log.Printf("Server http://%s is running. Press Ctrl+C to stop", s.Addr)
+	log.Printf("Server https://%s is running. Press Ctrl+C to stop", s.Addr)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT)

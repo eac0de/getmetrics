@@ -17,6 +17,7 @@ type AppConfig struct {
 	Restore         bool          `env:"RESTORE" yaml:"restore"`
 	DatabaseDSN     string        `env:"DATABASE_DSN" yaml:"database_dsn"`
 	SecretKey       string        `env:"KEY"`
+	PrivateKeyPath  string        `env:"CRYPTO_KEY"`
 }
 
 type EnvAppConfig struct {
@@ -59,6 +60,7 @@ func (c *AppConfig) ReadServerFlags() {
 	flag.BoolVar(&c.Restore, "r", c.Restore, "server restore")
 	flag.StringVar(&c.DatabaseDSN, "d", c.DatabaseDSN, "db address")
 	flag.StringVar(&c.SecretKey, "k", c.SecretKey, "secret key")
+	flag.StringVar(&c.PrivateKeyPath, "crypto-key", c.PrivateKeyPath, "crypto key")
 	flag.Parse()
 	c.StoreInterval = time.Duration(storeInterval) * time.Second
 
