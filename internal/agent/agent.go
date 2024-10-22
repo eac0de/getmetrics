@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/eac0de/getmetrics/internal/config"
@@ -38,12 +39,13 @@ func NewAgent(cfg *config.AgentConfig) *Agent {
 	}
 }
 
-func (a *Agent) StartPoll(ctx context.Context) {
+func (a *Agent) StartPoll(ctx context.Context, wg *sync.WaitGroup) {
 	ticker := time.NewTicker(a.cfg.PollInterval)
 	for {
 		select {
 		case <-ctx.Done():
 			log.Println("Poll goroutine is shutting down...")
+			wg.Done()
 			return
 		case <-ticker.C:
 			a.metrics = a.collectMetrics()
@@ -51,12 +53,13 @@ func (a *Agent) StartPoll(ctx context.Context) {
 	}
 }
 
-func (a *Agent) StartSendReport(ctx context.Context) {
+func (a *Agent) StartSendReport(ctx context.Context, wg *sync.WaitGroup) {
 	ticker := time.NewTicker(a.cfg.ReportInterval)
 	for {
 		select {
 		case <-ctx.Done():
 			log.Println("Goroutine sending reports has been shut down...")
+			wg.Done()
 			return
 		case <-ticker.C:
 			a.sendMetrics(a.metrics)

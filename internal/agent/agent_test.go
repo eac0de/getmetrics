@@ -30,8 +30,7 @@ func TestStartPoll(t *testing.T) {
 	context, cancel := context.WithCancel(context.Background())
 
 	go func() {
-		defer wg.Done() // Уменьшаем счетчик по завершению
-		agent.StartPoll(context)
+		agent.StartPoll(context, &wg)
 	}()
 
 	cancel()  // Отменяем контекст
@@ -48,8 +47,7 @@ func TestStartSendReport(t *testing.T) {
 
 	context, cancel := context.WithCancel(context.Background())
 	go func() {
-		defer wg.Done() // Уменьшаем счетчик по завершению
-		agent.StartSendReport(context)
+		agent.StartSendReport(context, &wg)
 	}()
 
 	cancel()  // Отменяем контекст
