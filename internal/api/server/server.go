@@ -21,3 +21,10 @@ func (s *Server) Run(router chi.Router) {
 		log.Fatal(err.Error())
 	}
 }
+
+func (s *Server) RunTLS(router chi.Router, privateKeyPath string) {
+	err := http.ListenAndServeTLS(s.Addr, "server.crt", privateKeyPath, router)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+}

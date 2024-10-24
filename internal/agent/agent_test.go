@@ -11,18 +11,18 @@ import (
 )
 
 func TestNewAgent(t *testing.T) {
-	var conf config.AgentConfig
+	var cfg config.AgentConfig
 	serverURL := "localhost:8080"
-	conf.ServerURL = serverURL
-	agent := NewAgent(&conf)
-	assert.Equal(t, agent.conf.ServerURL, "http://"+serverURL)
+	cfg.ServerURL = serverURL
+	agent := NewAgent(&cfg)
+	assert.Equal(t, agent.cfg.ServerURL, "http://"+serverURL)
 
 }
 
 func TestStartPoll(t *testing.T) {
-	var conf config.AgentConfig
-	conf.PollInterval = 10 * time.Second
-	agent := NewAgent(&conf)
+	var cfg config.AgentConfig
+	cfg.PollInterval = 10 * time.Second
+	agent := NewAgent(&cfg)
 
 	var wg sync.WaitGroup
 	wg.Add(1) // Увеличиваем счетчик
@@ -30,8 +30,7 @@ func TestStartPoll(t *testing.T) {
 	context, cancel := context.WithCancel(context.Background())
 
 	go func() {
-		defer wg.Done() // Уменьшаем счетчик по завершению
-		agent.StartPoll(context)
+		agent.StartPoll(context, &wg)
 	}()
 
 	cancel()  // Отменяем контекст
@@ -39,17 +38,16 @@ func TestStartPoll(t *testing.T) {
 }
 
 func TestStartSendReport(t *testing.T) {
-	var conf config.AgentConfig
-	conf.ReportInterval = 10 * time.Second
-	agent := NewAgent(&conf)
+	var cfg config.AgentConfig
+	cfg.ReportInterval = 10 * time.Second
+	agent := NewAgent(&cfg)
 
 	var wg sync.WaitGroup
 	wg.Add(1) // Увеличиваем счетчик
 
 	context, cancel := context.WithCancel(context.Background())
 	go func() {
-		defer wg.Done() // Уменьшаем счетчик по завершению
-		agent.StartSendReport(context)
+		agent.StartSendReport(context, &wg)
 	}()
 
 	cancel()  // Отменяем контекст
@@ -57,8 +55,8 @@ func TestStartSendReport(t *testing.T) {
 }
 
 func TestCollectMetrics(t *testing.T) {
-	var conf config.AgentConfig
-	agent := NewAgent(&conf)
+	var cfg config.AgentConfig
+	agent := NewAgent(&cfg)
 	agent.pollCount = 5
 	agent.collectMetrics()
 	assert.Equal(t, agent.pollCount, int64(6))

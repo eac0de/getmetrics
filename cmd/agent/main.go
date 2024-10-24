@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/eac0de/getmetrics/internal/agent"
@@ -30,12 +31,16 @@ func main() {
 		log.Fatal(err)
 	}
 	a := agent.NewAgent(cfg)
-	go a.StartPoll(ctx)
-	go a.StartSendReport(ctx)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go a.StartPoll(ctx, &wg)
+	go a.StartSendReport(ctx, &wg)
 
 	log.Println("Agent is running. Press Ctrl+C to stop")
 
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 	<-sigChan
+	cancel()
+	wg.Wait()
 }

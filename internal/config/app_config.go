@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"flag"
 	"os"
 	"time"
@@ -17,6 +18,7 @@ type AppConfig struct {
 	Restore         bool          `env:"RESTORE" yaml:"restore"`
 	DatabaseDSN     string        `env:"DATABASE_DSN" yaml:"database_dsn"`
 	SecretKey       string        `env:"KEY"`
+	PrivateKeyPath  string        `env:"CRYPTO_KEY"`
 }
 
 type EnvAppConfig struct {
@@ -30,6 +32,13 @@ func LoadAppConfig() (*AppConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+	configPath := getConfigPath()
+	if configPath != "" {
+		err := config.ReadJSON(configPath)
+		if err != nil {
+			return nil, err
+		}
+	}
 	config.ReadServerFlags()
 	err = config.ReadEnvConfig()
 	if err != nil {
@@ -38,12 +47,34 @@ func LoadAppConfig() (*AppConfig, error) {
 	return config, nil
 }
 
+func getConfigPath() string {
+	// Читаем путь к файлу конфигурации через флаг -c или переменную окружения CONFIG
+	var configPath string
+	flag.StringVar(&configPath, "config", os.Getenv("CONFIG"), "path to config file (JSON)")
+	flag.Parse()
+	return configPath
+}
+
 func (c *AppConfig) ReadYAML(filename string) error {
 	file, err := os.OpenFile(filename, os.O_RDONLY, 0666)
 	if err != nil {
 		return err
 	}
 	err = yaml.NewDecoder(file).Decode(c)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *AppConfig) ReadJSON(filename string) error {
+	file, err := os.OpenFile(filename, os.O_RDONLY, 0666)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	err = json.NewDecoder(file).Decode(c)
 	if err != nil {
 		return err
 	}
@@ -59,6 +90,7 @@ func (c *AppConfig) ReadServerFlags() {
 	flag.BoolVar(&c.Restore, "r", c.Restore, "server restore")
 	flag.StringVar(&c.DatabaseDSN, "d", c.DatabaseDSN, "db address")
 	flag.StringVar(&c.SecretKey, "k", c.SecretKey, "secret key")
+	flag.StringVar(&c.PrivateKeyPath, "crypto-key", c.PrivateKeyPath, "crypto key")
 	flag.Parse()
 	c.StoreInterval = time.Duration(storeInterval) * time.Second
 

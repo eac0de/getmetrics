@@ -92,10 +92,15 @@ func main() {
 		// Запускаем pprof на отдельном порту, если это необходимо
 		http.ListenAndServe(":6060", nil)
 	}()
-	go s.Run(r)
-	log.Printf("Server http://%s is running. Press Ctrl+C to stop", s.Addr)
+	if cfg.PrivateKeyPath == "" {
+		go s.Run(r)
+		log.Printf("Server http://%s is running. Press Ctrl+C to stop", s.Addr)
+	} else {
+		go s.RunTLS(r, cfg.PrivateKeyPath)
+		log.Printf("Server https://%s is running. Press Ctrl+C to stop", s.Addr)
+	}
 
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGINT)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
 	<-sigChan
 }

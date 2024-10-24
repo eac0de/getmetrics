@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"flag"
 	"os"
 	"time"
@@ -16,6 +17,7 @@ type (
 		ReportInterval time.Duration `yaml:"report_interval"`
 		SecretKey      string        `env:"KEY"`
 		RateLimit      int           `yaml:"rate_limit"`
+		PublicKeyPath  string        `env:"CRYPTO_KEY"`
 	}
 
 	EnvAgentConfig struct {
@@ -30,6 +32,13 @@ func LoadAgentConfig() (*AgentConfig, error) {
 	err := config.ReadYAML("configs/local.yml")
 	if err != nil {
 		return nil, err
+	}
+	configPath := getConfigPath()
+	if configPath != "" {
+		err := config.ReadJSON(configPath)
+		if err != nil {
+			return nil, err
+		}
 	}
 	config.ReadServerFlags()
 	err = config.ReadEnvConfig()
@@ -51,6 +60,20 @@ func (c *AgentConfig) ReadYAML(filename string) error {
 	return nil
 }
 
+func (c *AgentConfig) ReadJSON(filename string) error {
+	file, err := os.OpenFile(filename, os.O_RDONLY, 0666)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	err = json.NewDecoder(file).Decode(c)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (c *AgentConfig) ReadServerFlags() {
 	pollInterval := int(c.PollInterval) / int(time.Second)
 	reportInterval := int(c.ReportInterval) / int(time.Second)
@@ -58,6 +81,7 @@ func (c *AgentConfig) ReadServerFlags() {
 	flag.IntVar(&pollInterval, "p", pollInterval, "report interval in seconds")
 	flag.IntVar(&reportInterval, "r", reportInterval, "poll interval in seconds")
 	flag.StringVar(&c.SecretKey, "k", c.SecretKey, "secret key")
+	flag.StringVar(&c.PublicKeyPath, "crypto-key", c.PublicKeyPath, "crypto key")
 	flag.IntVar(&c.RateLimit, "l", c.RateLimit, "rate limit")
 	flag.Parse()
 	c.PollInterval = time.Duration(pollInterval) * time.Second
